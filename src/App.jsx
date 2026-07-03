@@ -83,9 +83,9 @@ export default function App() {
             <div style={{ fontSize: 10.5, color: "#7a8b99" }}>análises qualitativas, quantitativas e diagramas</div>
           </div>
         </div>
-        <div style={{ display: "flex", border: "1px solid #cfd6dd", borderRadius: 6, overflow: "hidden", marginLeft: 6 }}>
+        <div role="tablist" aria-label="Janelas do QualMap" style={{ display: "flex", border: "1px solid #cfd6dd", borderRadius: 6, overflow: "hidden", marginLeft: 6 }}>
           {tabs.map(([v, l]) => (
-            <button key={v} onClick={() => setTool(v)} style={{ border: "none", padding: "7px 14px", cursor: "pointer", fontSize: 12.5, fontWeight: 600, background: tool === v ? "#1f7a8c" : "#fff", color: tool === v ? "#fff" : "#46555f" }}>{l}</button>
+            <button key={v} role="tab" aria-selected={tool === v} onClick={() => setTool(v)} style={{ border: "none", padding: "7px 14px", cursor: "pointer", fontSize: 12.5, fontWeight: 600, background: tool === v ? "#1f7a8c" : "#fff", color: tool === v ? "#fff" : "#46555f" }}>{l}</button>
           ))}
         </div>
         <div style={{ flex: 1 }} />
@@ -104,9 +104,9 @@ export default function App() {
       {tool === "diag" && (
         <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 14px", borderBottom: "1px solid #eef1f4", background: "#fafbfc", flexShrink: 0 }}>
           <span style={{ fontSize: 11.5, color: "#7a8b99", fontWeight: 600 }}>Diagrama:</span>
-          <div style={{ display: "flex", border: "1px solid #cfd6dd", borderRadius: 6, overflow: "hidden" }}>
+          <div role="tablist" aria-label="Sub-abas do Diagrama" style={{ display: "flex", border: "1px solid #cfd6dd", borderRadius: 6, overflow: "hidden" }}>
             {[["tar", "TAR"], ["geral", "Geral"]].map(([v, l]) => (
-              <button key={v} onClick={() => setDiagSub(v)} style={{ border: "none", padding: "5px 14px", cursor: "pointer", fontSize: 12, fontWeight: 600, background: diagSub === v ? "#1f7a8c" : "#fff", color: diagSub === v ? "#fff" : "#5a6b7a" }}>{l}</button>
+              <button key={v} role="tab" aria-selected={diagSub === v} onClick={() => setDiagSub(v)} style={{ border: "none", padding: "5px 14px", cursor: "pointer", fontSize: 12, fontWeight: 600, background: diagSub === v ? "#1f7a8c" : "#fff", color: diagSub === v ? "#fff" : "#5a6b7a" }}>{l}</button>
             ))}
           </div>
         </div>

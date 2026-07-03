@@ -363,6 +363,7 @@ function AnaliseQuantitativa({ active = true }) {
   const [pasteText, setPasteText] = useState("");
   const [result, setResult] = useState(null);
   const [pendingCalc, setPendingCalc] = useState(false);
+  const [copied, setCopied] = useState(false);
   const resultRef = useRef(null);
   const chartRef = useRef(null);
   const [chartColor, setChartColor] = useState("#1f7a8c");
@@ -481,6 +482,25 @@ function AnaliseQuantitativa({ active = true }) {
     img.src = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(str)));
   };
 
+  // exporta a grade de dados como CSV (separador ";" para não conflitar com a vírgula decimal)
+  const exportCSV = () => {
+    const esc = (v) => { const s = String(v ?? ""); return /[";\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+    const lines = [grid.headers.map(esc).join(";"), ...grid.rows.map((r) => r.map(esc).join(";"))];
+    dlFile(new Blob(["﻿" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" }), "dados.csv");
+  };
+  // copia os números do resultado (texto renderizado) para a área de transferência
+  const copyResult = async () => {
+    const txt = resultRef.current ? resultRef.current.innerText : "";
+    if (!txt.trim()) return;
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) await navigator.clipboard.writeText(txt);
+      else throw new Error("sem clipboard");
+    } catch {
+      const ta = document.createElement("textarea"); ta.value = txt; ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta); ta.select(); try { document.execCommand("copy"); } catch {} document.body.removeChild(ta);
+    }
+    setCopied(true); setTimeout(() => setCopied(false), 1800);
+  };
   const exportPDF = () => {
     const w = window.open("", "_blank"); if (!w) { try { window.alert("Permita pop-ups para gerar o relatório em PDF."); } catch {} return; }
     let dataTbl = "<p>Sem dados.</p>";
@@ -898,6 +918,8 @@ function AnaliseQuantitativa({ active = true }) {
       <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
         <h2 style={T.h2}>Análise Quantitativa</h2>
         <div style={{ flex: 1 }} />
+        {result && <button style={T.btn} onClick={copyResult} title="copiar os números do resultado para colar em outro lugar">{copied ? "Copiado!" : "Copiar resultado"}</button>}
+        <button style={T.btn} onClick={exportCSV} title="baixar os dados da grade em CSV (separador ;)">Exportar CSV</button>
         <button style={T.btn} onClick={exportPDF} title="gerar relatório com os dados e o resultado">Relatório PDF</button>
       </div>
       <p style={T.sub}>Testes estatísticos sobre dados que você cola ou abre aqui. Independente das outras janelas.</p>
@@ -916,7 +938,7 @@ function AnaliseQuantitativa({ active = true }) {
                     <th key={c} style={{ position: "sticky", top: 0, background: "#f7f9fb", borderBottom: "1px solid #e3e9ee", padding: 2 }}>
                       <div style={{ display: "flex", flexDirection: "column", alignItems: "stretch" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
-                          <input value={h} onChange={(e) => setHeader(c, e.target.value)} style={{ width: 78, boxSizing: "border-box", padding: "4px 5px", border: "1px solid #cfd6dd", borderRadius: 4, fontSize: 12, fontWeight: 700, color: "#34495e", textAlign: "center" }} />
+                          <input value={h} onChange={(e) => setHeader(c, e.target.value)} aria-label={`nome da variável ${c + 1}`} style={{ width: 78, boxSizing: "border-box", padding: "4px 5px", border: "1px solid #cfd6dd", borderRadius: 4, fontSize: 12, fontWeight: 700, color: "#34495e", textAlign: "center" }} />
                           {grid.headers.length > 1 && <button onClick={() => removeCol(c)} title="remover coluna" style={{ border: "none", background: "none", color: "#b3402f", cursor: "pointer", fontSize: 11, padding: 0 }}>✕</button>}
                         </div>
                         {data && data.headers[c] && <div style={{ fontSize: 9, fontWeight: 400, color: data.numeric[data.headers[c]] ? "#2e7d4f" : "#b06a1f", textAlign: "center" }}>{data.numeric[data.headers[c]] ? "num" : "categ"}</div>}
@@ -931,7 +953,7 @@ function AnaliseQuantitativa({ active = true }) {
                   <tr key={r}>
                     <td style={{ textAlign: "center", color: "#9aa7b2" }}>{grid.rows.length > 1 ? <button onClick={() => removeRow(r)} title="remover linha" style={{ border: "none", background: "none", color: "#c3ccd4", cursor: "pointer", fontSize: 11, padding: 0 }}>✕</button> : null}</td>
                     {grid.headers.map((_, c) => (
-                      <td key={c} style={{ padding: 1 }}><input value={row[c] != null ? row[c] : ""} onChange={(e) => setCell(r, c, e.target.value)} style={{ width: 86, boxSizing: "border-box", padding: "4px 5px", border: "1px solid #eef1f4", borderRadius: 3, fontSize: 12.5, fontFamily: "inherit" }} /></td>
+                      <td key={c} style={{ padding: 1 }}><input value={row[c] != null ? row[c] : ""} onChange={(e) => setCell(r, c, e.target.value)} aria-label={`${grid.headers[c] || "variável " + (c + 1)}, linha ${r + 1}`} style={{ width: 86, boxSizing: "border-box", padding: "4px 5px", border: "1px solid #eef1f4", borderRadius: 3, fontSize: 12.5, fontFamily: "inherit" }} /></td>
                     ))}
                     <td />
                   </tr>
