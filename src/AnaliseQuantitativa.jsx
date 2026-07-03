@@ -12,7 +12,6 @@ function boxStats(a) {
 import * as ST from "./stats.js";
 import { SUITE } from "./lib.js";
 
-const CHART_COLORS = ["#1f7a8c", "#7a5ea8", "#2e7d4f", "#b06a1f", "#c0392b", "#16a085"];
 const PALETTES = {
   "Padrão": ["#1f7a8c", "#7a5ea8", "#2e7d4f", "#b06a1f", "#c0392b", "#16a085"],
   "Vivo": ["#1971c2", "#2f9e44", "#e8590c", "#9c36b5", "#e03131", "#0c8599"],
@@ -20,6 +19,9 @@ const PALETTES = {
   "Azuis": ["#0b4f8a", "#1565c0", "#1f7ad6", "#4c9bf0", "#7bb8f7", "#a8d1fb"],
   "Cinzas": ["#343a40", "#495057", "#6c757d", "#909aa3", "#adb5bd", "#ced4da"],
 };
+const CHART_COLORS = PALETTES["Padrão"];
+// p → asteriscos de significância (usado no gráfico, no pós-hoc e no resultado)
+const stars = (p) => (p < 0.001 ? "***" : p < 0.01 ? "**" : p < 0.05 ? "*" : "n.s.");
 function histogram(x, nbins = 8) {
   if (x.length < 2) return [];
   const min = Math.min(...x), max = Math.max(...x); if (max === min) return [{ label: String(min), n: x.length }];
@@ -96,18 +98,6 @@ function parseDelim(text, delim) {
   }
   if (field.length || row.length) pushR();
   return rows.filter((r) => r.length && !(r.length === 1 && r[0].trim() === ""));
-}
-function parseTable(text) {
-  const firstLine = String(text).split(/\r?\n/)[0] || "";
-  const rows = parseDelim(text, detectDelim(firstLine));
-  if (!rows.length) return null;
-  const headers = rows[0].map((h, i) => (String(h).trim() || `col${i + 1}`));
-  const body = rows.slice(1);
-  const cols = {};
-  headers.forEach((h, j) => { cols[h] = body.map((r) => (r[j] != null ? r[j] : "")); });
-  const numeric = {};
-  headers.forEach((h) => { const vals = cols[h].filter((v) => String(v).trim() !== ""); const ok = vals.filter((v) => Number.isFinite(parseFloat(String(v).replace(",", ".")))).length; numeric[h] = vals.length > 0 && ok / vals.length >= 0.8; });
-  return { headers, rows: body, cols, numeric, n: body.length };
 }
 
 const T = {
@@ -435,7 +425,6 @@ function AnaliseQuantitativa({ active = true }) {
   };
 
   const pValue = result && result.res && Number.isFinite(result.res.p) ? result.res.p : null;
-  const stars = (p) => (p < 0.001 ? "***" : p < 0.01 ? "**" : p < 0.05 ? "*" : "n.s.");
   const BRACKET_KINDS = ["t2", "anova", "mw", "median", "ks2", "ww2", "moses", "anova2", "chi2", "fisher"];
   const BAR_KINDS = ["t2", "anova", "mw", "median", "ks2", "ww2", "moses", "anova2"];
   const barsType = () => !chartType || chartType === "barras"; // colchete só faz sentido em barras verticais
@@ -865,7 +854,7 @@ function AnaliseQuantitativa({ active = true }) {
                   <span style={{ fontSize: 11, color: "#9aa7b2" }}>marque quais comparações mostrar no gráfico:</span>
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-                  {result.res.posthoc.map((pp) => { const key = pp.a + "|" + pp.b; const st = pp.padj < 0.001 ? "***" : pp.padj < 0.01 ? "**" : pp.padj < 0.05 ? "*" : "n.s."; return (
+                  {result.res.posthoc.map((pp) => { const key = pp.a + "|" + pp.b; const st = stars(pp.padj); return (
                     <div key={key} style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                       <label style={{ ...chk, minWidth: 120 }}><input type="checkbox" checked={shownPairs.has(key)} onChange={(e) => setShownPairs((s) => { const n = new Set(s); e.target.checked ? n.add(key) : n.delete(key); return n; })} /> {pp.a}×{pp.b} <b style={{ color: pp.padj < 0.05 ? "#2e7d4f" : "#9aa7b2" }}>{st}</b></label>
                       {shownPairs.has(key) && <input value={sigCustom[key] || ""} onChange={(e) => setSigCustom((s) => ({ ...s, [key]: e.target.value }))} placeholder={bracketLabel(key, pp.padj)} title="texto sobre este colchete" style={{ ...inp, width: 130, flex: "0 0 auto" }} />}
@@ -1083,7 +1072,7 @@ function Result({ data }) {
       {key === "t1" && <><Row k="Média" v={fmt(res.mean, 4)} /><Row k="μ₀" v={fmt(res.mu0, 4)} /><Row k="DP" v={fmt(res.sd, 4)} /><Row k="t" v={fmt(res.t, 4)} /><Row k="gl" v={res.df} /><Row k="p (bicaudal)" v={fmtP(res.p)} /><Row k={`IC ${Math.round(res.conf * 100)}% da média`} v={`[${fmt(res.ci[0], 3)} ; ${fmt(res.ci[1], 3)}]`} /><Row k="d de Cohen" v={fmt(res.d, 3)} /><Sig p={res.p} /><EffectSize kind="d" value={res.d} /><Assumptions a={res.assump} /></>}
       {(key === "t2") && <><Row k={`Média ${res.g1}`} v={`${fmt(res.mean1, 3)} (n=${res.n1})`} /><Row k={`Média ${res.g2}`} v={`${fmt(res.mean2, 3)} (n=${res.n2})`} /><Row k="t" v={fmt(res.t, 4)} /><Row k="gl" v={fmt(res.df, 2)} /><Row k="p (bicaudal)" v={fmtP(res.p)} /><Row k="d de Cohen" v={fmt(res.d, 3)} /><Sig p={res.p} /><EffectSize kind="d" value={res.d} /><Assumptions a={res.assump} /></>}
       {key === "tp" && <><Row k="Média 1" v={fmt(res.mean1, 3)} /><Row k="Média 2" v={fmt(res.mean2, 3)} /><Row k="Média das diferenças" v={fmt(res.meanDiff, 4)} /><Row k="t" v={fmt(res.t, 4)} /><Row k="gl" v={res.df} /><Row k="p (bicaudal)" v={fmtP(res.p)} /><Row k="d de Cohen" v={fmt(res.d, 3)} /><Sig p={res.p} /><EffectSize kind="d" value={res.d} extra="dz" /><Assumptions a={res.assump} /></>}
-      {key === "anova" && <><Row k="F" v={fmt(res.F, 4)} /><Row k="gl" v={`${res.dfb} ; ${res.dfw}`} /><Row k="p" v={fmtP(res.p)} /><Row k="η² (eta²)" v={fmt(res.eta2, 3)} /><div style={{ overflowX: "auto", marginTop: 8 }}><table style={{ borderCollapse: "collapse" }}><thead><tr>{["Grupo", "n", "Média", "DP"].map((h) => <th key={h} style={T.th}>{h}</th>)}</tr></thead><tbody>{res.groups.map((g) => <tr key={g.name}><td style={T.td}>{g.name}</td><td style={T.td}>{g.n}</td><td style={T.td}>{fmt(g.mean, 3)}</td><td style={T.td}>{fmt(g.sd, 3)}</td></tr>)}</tbody></table></div><Sig p={res.p} />{res.posthoc && res.posthoc.length > 0 && <div style={{ marginTop: 10 }}><div style={{ fontSize: 11.5, fontWeight: 700, color: "#5a6b7a", marginBottom: 4 }}>Pós-hoc — quais grupos diferem <span style={{ fontWeight: 400, color: "#9aa7b2" }}>({res.posthocMethod === "tukey" ? "Tukey HSD" : "t de Welch · Bonferroni"})</span></div><div style={{ overflowX: "auto" }}><table style={{ borderCollapse: "collapse" }}><thead><tr>{["Par", "p", "p ajustado", ""].map((h) => <th key={h} style={T.th}>{h}</th>)}</tr></thead><tbody>{res.posthoc.map((pp, i) => <tr key={i}><td style={T.td}>{pp.a} × {pp.b}</td><td style={T.td}>{fmtP(pp.p)}</td><td style={T.td}>{fmtP(pp.padj)}</td><td style={{ ...T.td, fontWeight: 700, color: pp.padj < 0.05 ? "#2e7d4f" : "#9aa7b2" }}>{pp.padj < 0.001 ? "***" : pp.padj < 0.01 ? "**" : pp.padj < 0.05 ? "*" : "n.s."}</td></tr>)}</tbody></table></div></div>}<EffectSize kind="eta2" value={res.eta2} extra={"ω² = " + fmt((res.ssb - res.dfb * res.msw) / (res.ssb + res.ssw + res.msw), 3)} /><Assumptions a={res.assump} /></>}
+      {key === "anova" && <><Row k="F" v={fmt(res.F, 4)} /><Row k="gl" v={`${res.dfb} ; ${res.dfw}`} /><Row k="p" v={fmtP(res.p)} /><Row k="η² (eta²)" v={fmt(res.eta2, 3)} /><div style={{ overflowX: "auto", marginTop: 8 }}><table style={{ borderCollapse: "collapse" }}><thead><tr>{["Grupo", "n", "Média", "DP"].map((h) => <th key={h} style={T.th}>{h}</th>)}</tr></thead><tbody>{res.groups.map((g) => <tr key={g.name}><td style={T.td}>{g.name}</td><td style={T.td}>{g.n}</td><td style={T.td}>{fmt(g.mean, 3)}</td><td style={T.td}>{fmt(g.sd, 3)}</td></tr>)}</tbody></table></div><Sig p={res.p} />{res.posthoc && res.posthoc.length > 0 && <div style={{ marginTop: 10 }}><div style={{ fontSize: 11.5, fontWeight: 700, color: "#5a6b7a", marginBottom: 4 }}>Pós-hoc — quais grupos diferem <span style={{ fontWeight: 400, color: "#9aa7b2" }}>({res.posthocMethod === "tukey" ? "Tukey HSD" : "t de Welch · Bonferroni"})</span></div><div style={{ overflowX: "auto" }}><table style={{ borderCollapse: "collapse" }}><thead><tr>{["Par", "p", "p ajustado", ""].map((h) => <th key={h} style={T.th}>{h}</th>)}</tr></thead><tbody>{res.posthoc.map((pp, i) => <tr key={i}><td style={T.td}>{pp.a} × {pp.b}</td><td style={T.td}>{fmtP(pp.p)}</td><td style={T.td}>{fmtP(pp.padj)}</td><td style={{ ...T.td, fontWeight: 700, color: pp.padj < 0.05 ? "#2e7d4f" : "#9aa7b2" }}>{stars(pp.padj)}</td></tr>)}</tbody></table></div></div>}<EffectSize kind="eta2" value={res.eta2} extra={"ω² = " + fmt((res.ssb - res.dfb * res.msw) / (res.ssb + res.ssw + res.msw), 3)} /><Assumptions a={res.assump} /></>}
       {key === "pearson" && <><Row k="r" v={fmt(res.r, 4)} /><Row k="r² (variância explicada)" v={fmt(res.r2, 4)} /><Row k="t" v={fmt(res.t, 4)} /><Row k="gl" v={res.df} /><Row k="p" v={fmtP(res.p)} /><Row k={`IC ${Math.round(res.conf * 100)}% de r`} v={`[${fmt(res.ci[0], 3)} ; ${fmt(res.ci[1], 3)}]`} /><Sig p={res.p} /><EffectSize kind="r" value={res.r} /></>}
       {key === "spearman" && <><Row k="ρ (rho)" v={fmt(res.rho, 4)} /><Row k="t" v={fmt(res.t, 4)} /><Row k="gl" v={res.df} /><Row k="p" v={fmtP(res.p)} /><Sig p={res.p} /><EffectSize kind="rho" value={res.rho} /></>}
       {key === "wilcoxon" && <><Row k="W⁺" v={fmt(res.Wplus, 1)} /><Row k="W⁻" v={fmt(res.Wminus, 1)} /><Row k="W" v={fmt(res.W, 1)} /><Row k="z" v={fmt(res.z, 4)} /><Row k="p (aprox. normal)" v={fmtP(res.p)} /><Row k="n (pares ≠ 0)" v={res.n} /><Sig p={res.p} /><EffectSize kind="r" value={Math.abs(res.z) / Math.sqrt(res.n)} extra="r = |z|/√n" /></>}
