@@ -142,7 +142,9 @@ export function ciMean(raw, conf = 0.95) {
 /* ============ testes paramétricos ============ */
 export function oneSampleT(raw, mu0 = 0, conf = 0.95) {
   const x = toNums(raw); const n = x.length; if (n < 2) return { error: "Mínimo de 2 observações." };
-  const m = mean(x); const sd = Math.sqrt(variance(x)); const se = sd / Math.sqrt(n);
+  const m = mean(x); const sd = Math.sqrt(variance(x));
+  if (sd === 0) return { error: "Sem variabilidade nos dados (todos os valores iguais) — teste t indefinido." };
+  const se = sd / Math.sqrt(n);
   const t = (m - mu0) / se; const df = n - 1; const p = tTwoTailP(t, df); const tc = tCrit(df, conf);
   return { test: "t para uma amostra", n, mean: m, sd, se, mu0, t, df, p, ci: [m - tc * se, m + tc * se], conf, d: (m - mu0) / sd };
 }
@@ -150,6 +152,7 @@ export function twoSampleT(rawA, rawB, { welch = true, conf = 0.95 } = {}) {
   const x = toNums(rawA), y = toNums(rawB); const n1 = x.length, n2 = y.length;
   if (n1 < 2 || n2 < 2) return { error: "Cada grupo precisa de ao menos 2 observações." };
   const m1 = mean(x), m2 = mean(y), v1 = variance(x), v2 = variance(y);
+  if (v1 === 0 && v2 === 0) return { error: "Sem variabilidade nos dois grupos (valores constantes) — teste t indefinido." };
   let t, df;
   if (welch) { const se = Math.sqrt(v1 / n1 + v2 / n2); t = (m1 - m2) / se; df = (v1 / n1 + v2 / n2) ** 2 / ((v1 / n1) ** 2 / (n1 - 1) + (v2 / n2) ** 2 / (n2 - 1)); }
   else { const sp2 = ((n1 - 1) * v1 + (n2 - 1) * v2) / (n1 + n2 - 2); const se = Math.sqrt(sp2 * (1 / n1 + 1 / n2)); t = (m1 - m2) / se; df = n1 + n2 - 2; }
@@ -161,6 +164,7 @@ export function pairedT(rawA, rawB, conf = 0.95) {
   const x = toNums(rawA), y = toNums(rawB);
   if (x.length !== y.length || x.length < 2) return { error: "As duas colunas precisam ter o mesmo nº de observações (≥2)." };
   const d = x.map((v, i) => v - y[i]); const r = oneSampleT(d, 0, conf);
+  if (r.error) return { error: r.error };
   return { ...r, test: "t para amostras pareadas", meanDiff: r.mean, mean1: mean(x), mean2: mean(y) };
 }
 export function oneWayAnova(groups, names) {
@@ -204,6 +208,14 @@ export function cronbach(itemColumns) {
 }
 
 /* ============ não-paramétricos ============ */
+// p bicaudal pela aproximação normal COM correção de continuidade (afasta 0,5 a
+// estatística observada da média antes de padronizar); menos anti-conservador em
+// amostras pequenas, que é onde estes testes são usados. Devolve z corrigido e p.
+function normalCC(stat, mu, sigma) {
+  if (!(sigma > 0)) return { z: 0, p: 1 };
+  const z = (stat < mu ? -1 : 1) * Math.max(0, Math.abs(stat - mu) - 0.5) / sigma;
+  return { z, p: 2 * (1 - normalCDF(Math.abs(z))) };
+}
 export function mannWhitney(rawA, rawB) {
   const x = toNums(rawA), y = toNums(rawB); const n1 = x.length, n2 = y.length;
   if (n1 < 1 || n2 < 1) return { error: "Cada grupo precisa de observações." };
@@ -211,7 +223,7 @@ export function mannWhitney(rawA, rawB) {
   const R1 = sum(ranks.slice(0, n1)); const U1 = R1 - n1 * (n1 + 1) / 2; const U2 = n1 * n2 - U1; const U = Math.min(U1, U2);
   const mu = n1 * n2 / 2; const N = n1 + n2;
   const sigma = Math.sqrt((n1 * n2 / 12) * ((N + 1) - tieT / (N * (N - 1))));
-  const z = (U - mu) / sigma; const p = 2 * (1 - normalCDF(Math.abs(z)));
+  const { z, p } = normalCC(U, mu, sigma);
   return { test: "Mann-Whitney U (2 amostras independentes)", n1, n2, U, U1, U2, z, p };
 }
 export function wilcoxonSignedRank(rawA, rawB) {
@@ -223,7 +235,7 @@ export function wilcoxonSignedRank(rawA, rawB) {
   let Wp = 0, Wm = 0; diffs.forEach((d, i) => (d > 0 ? (Wp += ranks[i]) : (Wm += ranks[i])));
   const W = Math.min(Wp, Wm); const mu = n * (n + 1) / 4;
   const sigma = Math.sqrt((n * (n + 1) * (2 * n + 1) - tieT / 2) / 24);
-  const z = (W - mu) / sigma; const p = 2 * (1 - normalCDF(Math.abs(z)));
+  const { z, p } = normalCC(W, mu, sigma);
   return { test: "Wilcoxon (2 amostras relacionadas)", n, Wplus: Wp, Wminus: Wm, W, z, p };
 }
 export function chiSquareIndependence(table) {
@@ -254,9 +266,23 @@ export function medianTest(groups, names) {
   if (k < 2) return { error: "Informe ao menos 2 grupos." };
   const all = G.flat().sort((a, b) => a - b); const md = quantile(all, 0.5);
   const tbl = G.map((g) => { const above = g.filter((v) => v > md).length; return [above, g.length - above]; });
+  const totAbove = sum(tbl.map((r) => r[0]));
+  if (totAbove === 0 || totAbove === all.length) return { error: "Sem dispersão em torno da mediana global (todos os valores caem de um lado só) — teste da Mediana indefinido." };
   const cs = chiSquareIndependence(tbl);
   if (cs.error) return cs;
   return { test: "Teste da Mediana", median: md, k, chi2: cs.chi2, df: cs.df, p: cs.p, minExpected: cs.minExpected, groups: G.map((g, i) => ({ name: (names && names[i]) || `G${i + 1}`, n: g.length, above: g.filter((v) => v > md).length })) };
+}
+// Q_KS(λ): cauda da distribuição de Kolmogorov-Smirnov com controle de convergência
+// (Numerical Recipes). Retorna 1 quando a série não converge — ex.: λ=0 (D=0),
+// caso em que amostras idênticas devem dar p=1, e não p=0.
+function probks(lam) {
+  const EPS1 = 1e-3, EPS2 = 1e-8; let fac = 2, sum = 0, termbf = 0;
+  for (let j = 1; j <= 100; j++) {
+    const term = fac * Math.exp(-2 * j * j * lam * lam); sum += term;
+    if (Math.abs(term) <= EPS1 * termbf || Math.abs(term) <= EPS2 * sum) return Math.min(1, Math.max(0, sum));
+    fac = -fac; termbf = Math.abs(term);
+  }
+  return 1;
 }
 // Kolmogorov-Smirnov, duas amostras
 export function ks2(rawA, rawB) {
@@ -265,8 +291,7 @@ export function ks2(rawA, rawB) {
   const all = [...new Set([...x, ...y])].sort((a, b) => a - b); let D = 0;
   for (const v of all) { const f1 = x.filter((t) => t <= v).length / n1, f2 = y.filter((t) => t <= v).length / n2; D = Math.max(D, Math.abs(f1 - f2)); }
   const ne = n1 * n2 / (n1 + n2); const lam = (Math.sqrt(ne) + 0.12 + 0.11 / Math.sqrt(ne)) * D;
-  let p = 0; for (let j = 1; j <= 100; j++) p += 2 * Math.pow(-1, j - 1) * Math.exp(-2 * j * j * lam * lam);
-  return { test: "Kolmogorov-Smirnov (2 amostras)", n1, n2, D, p: Math.min(1, Math.max(0, p)) };
+  return { test: "Kolmogorov-Smirnov (2 amostras)", n1, n2, D, p: probks(lam) };
 }
 // Wald-Wolfowitz (runs) para duas amostras independentes
 export function waldWolfowitz2(rawA, rawB) {
@@ -275,7 +300,7 @@ export function waldWolfowitz2(rawA, rawB) {
   const comb = [...x.map((v) => [v, 0]), ...y.map((v) => [v, 1])].sort((a, b) => a[0] - b[0]);
   let runs = 1; for (let i = 1; i < comb.length; i++) if (comb[i][1] !== comb[i - 1][1]) runs++;
   const N = n1 + n2; const mu = 2 * n1 * n2 / N + 1; const sigma = Math.sqrt(2 * n1 * n2 * (2 * n1 * n2 - N) / (N * N * (N - 1)));
-  const z = (runs - mu) / sigma; const p = 2 * (1 - normalCDF(Math.abs(z)));
+  const { z, p } = normalCC(runs, mu, sigma);
   return { test: "Wald-Wolfowitz (2 amostras independentes)", n1, n2, runs, expected: mu, z, p };
 }
 // ANOVA fatorial (dois fatores, com interação). Exata para delineamentos balanceados.
@@ -323,7 +348,7 @@ export function runsTest(raw) {
   if (!n1 || !n2) return { error: "Sem variação em torno da mediana." };
   let runs = 1; for (let i = 1; i < seq.length; i++) if (seq[i] !== seq[i - 1]) runs++;
   const N = n1 + n2; const mu = 2 * n1 * n2 / N + 1; const sigma = Math.sqrt(2 * n1 * n2 * (2 * n1 * n2 - N) / (N * N * (N - 1)));
-  const z = (runs - mu) / sigma; const p = 2 * (1 - normalCDF(Math.abs(z)));
+  const { z, p } = normalCC(runs, mu, sigma);
   return { test: "Teste de aleatoriedade (runs / Wald-Wolfowitz)", n, runs, n1, n2, expected: mu, z, p };
 }
 
@@ -354,7 +379,7 @@ export function shapiroWilk(raw) {
   if (den === 0) return { error: "Sem variabilidade (todos os valores iguais)." };
   const W = num * num / den;
   let p;
-  if (n === 3) p = Math.min(1, Math.max(0, (6 / Math.PI) * (Math.asin(Math.sqrt(W)) - Math.asin(Math.sqrt(0.75))))); // CDF exata (rejeita p/ W pequeno)
+  if (n === 3) p = Math.min(1, Math.max(0, (6 / Math.PI) * (Math.asin(Math.sqrt(Math.min(1, W))) - Math.asin(Math.sqrt(0.75))))); // CDF exata (rejeita p/ W pequeno); clampa W p/ evitar asin(>1)=NaN
   else {
     let mu_, sig, w1;
     if (n <= 11) { const g = -2.273 + 0.459 * n; w1 = -Math.log(g - Math.log(1 - W)); mu_ = 0.544 - 0.39978 * n + 0.025054 * n * n - 0.0006714 * n * n * n; sig = Math.exp(1.3822 - 0.77857 * n + 0.062767 * n * n - 0.0020322 * n * n * n); }
