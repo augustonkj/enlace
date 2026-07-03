@@ -37,7 +37,8 @@ export default function App() {
       const tar = SUITE.getTar ? SUITE.getTar() : null;
       const qual = SUITE.getQual ? await SUITE.getQual() : null;
       const geral = SUITE.getGeral ? SUITE.getGeral() : null;
-      const payload = { __qualmap: 1, savedAt: new Date().toISOString(), tar, qual, geral };
+      const quant = SUITE.getQuant ? SUITE.getQuant() : null;
+      const payload = { __qualmap: 1, savedAt: new Date().toISOString(), tar, qual, geral, quant };
       const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
       const u = URL.createObjectURL(blob); const a = document.createElement("a");
       a.href = u; a.download = `qualmap-${new Date().toISOString().slice(0, 10)}.json`; a.click();
@@ -55,6 +56,7 @@ export default function App() {
         if (o.tar && SUITE.setTar) SUITE.setTar(o.tar);
         if (o.qual && SUITE.setQual) await SUITE.setQual(o.qual);
         if (o.geral && SUITE.setGeral) SUITE.setGeral(o.geral);
+        if (o.quant && SUITE.setQuant) SUITE.setQuant(o.quant);
         setMsg("projeto do QualMap restaurado"); setTimeout(() => setMsg(""), 2500);
       } catch (e) { setMsg("não foi possível abrir o arquivo"); setTimeout(() => setMsg(""), 3000); }
     };

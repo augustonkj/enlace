@@ -363,8 +363,14 @@ function absOffset(node, offset) {
   while (el && !(el.dataset && el.dataset.start != null)) el = el.parentElement;
   if (!el) return null;
   const base = parseInt(el.dataset.start, 10);
-  if (node.nodeType === 3) return base + offset;
-  return base;
+  if (node.nodeType !== 3) return base;
+  // com a busca ativa o segmento vira vários filhos (texto + <mark>): soma o
+  // comprimento do texto de todos os nós anteriores até o elemento [data-start],
+  // senão o recorte cai em caracteres errados.
+  let extra = offset;
+  for (let cur = node; cur && cur !== el; cur = cur.parentNode)
+    for (let sib = cur.previousSibling; sib; sib = sib.previousSibling) extra += (sib.textContent || "").length;
+  return base + extra;
 }
 
 function escapeHTML(s) {

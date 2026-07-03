@@ -10,6 +10,7 @@ function boxStats(a) {
   return { q1, med, q3, lo, hi, min: v[0], max: v[n - 1] };
 }
 import * as ST from "./stats.js";
+import { SUITE } from "./lib.js";
 
 const CHART_COLORS = ["#1f7a8c", "#7a5ea8", "#2e7d4f", "#b06a1f", "#c0392b", "#16a085"];
 const PALETTES = {
@@ -513,6 +514,23 @@ function AnaliseQuantitativa({ active = true }) {
   // restaurar / autosave (grade)
   useEffect(() => { try { const s = window.localStorage.getItem(LSK); if (s) { const o = JSON.parse(s); if (o && o.grid && Array.isArray(o.grid.headers)) setGrid(o.grid); } } catch {} }, []);
   useEffect(() => { const t = setTimeout(() => { try { window.localStorage.setItem(LSK, JSON.stringify({ grid })); } catch {} }, 600); return () => clearTimeout(t); }, [grid]);
+  // expõe a Análise Quantitativa ao Salvar/Abrir QualMap (App.jsx)
+  const quantRef = useRef({});
+  quantRef.current = { grid, testKey, vars, mu0, conf, hMoses };
+  useEffect(() => {
+    SUITE.getQuant = () => ({ ...quantRef.current });
+    SUITE.setQuant = (d) => {
+      if (!d) return;
+      if (d.grid && Array.isArray(d.grid.headers)) setGrid(d.grid);
+      if (d.testKey) setTestKey(d.testKey);
+      if (d.vars && typeof d.vars === "object") setVars(d.vars);
+      if (d.mu0 != null) setMu0(String(d.mu0));
+      if (d.conf != null) setConf(String(d.conf));
+      if (d.hMoses != null) setHMoses(String(d.hMoses));
+      setResult(null); setErr("");
+    };
+    return () => { SUITE.getQuant = null; SUITE.setQuant = null; };
+  }, []);
 
   const data = useMemo(() => gridToData(grid), [grid]);
   const test = ALL.find((t) => t.key === testKey);

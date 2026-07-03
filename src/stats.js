@@ -89,7 +89,15 @@ export function tCrit(df, conf) {
 }
 
 /* ============ utilitários ============ */
-export const toNums = (arr) => arr.map((v) => (typeof v === "number" ? v : parseFloat(String(v).replace(",", ".")))).filter((v) => Number.isFinite(v));
+export const numOf = (v) => (typeof v === "number" ? v : parseFloat(String(v).replace(",", ".")));
+export const toNums = (arr) => arr.map(numOf).filter((v) => Number.isFinite(v));
+// pareia duas colunas por linha, mantendo só os pares em que AMBOS os valores são
+// numéricos — evita desalinhar X e Y quando há célula vazia no meio de uma coluna.
+export function pairNums(rawA, rawB) {
+  const n = Math.min(rawA.length, rawB.length); const X = [], Y = [];
+  for (let i = 0; i < n; i++) { const a = numOf(rawA[i]), b = numOf(rawB[i]); if (Number.isFinite(a) && Number.isFinite(b)) { X.push(a); Y.push(b); } }
+  return { X, Y };
+}
 const sum = (a) => a.reduce((s, x) => s + x, 0);
 const mean = (a) => sum(a) / a.length;
 function variance(a, sample = true) { const m = mean(a); const ss = sum(a.map((x) => (x - m) ** 2)); return ss / (a.length - (sample ? 1 : 0)); }
@@ -166,9 +174,9 @@ export function oneWayAnova(groups, names) {
   return { test: "ANOVA de um fator (teste F)", k, N, F, dfb, dfw, p, ssb, ssw, msb, msw, eta2: ssb / sst, groups: rows };
 }
 export function pearson(rawA, rawB, conf = 0.95) {
-  const x = toNums(rawA), y = toNums(rawB); const n = Math.min(x.length, y.length);
+  const { X, Y } = pairNums(rawA, rawB); const n = X.length;
   if (n < 3) return { error: "Mínimo de 3 pares." };
-  const X = x.slice(0, n), Y = y.slice(0, n); const mx = mean(X), my = mean(Y);
+  const mx = mean(X), my = mean(Y);
   let sxy = 0, sxx = 0, syy = 0; for (let i = 0; i < n; i++) { sxy += (X[i] - mx) * (Y[i] - my); sxx += (X[i] - mx) ** 2; syy += (Y[i] - my) ** 2; }
   const r = sxy / Math.sqrt(sxx * syy); const df = n - 2; const t = r * Math.sqrt(df / (1 - r * r)); const p = tTwoTailP(t, df);
   const z = 0.5 * Math.log((1 + r) / (1 - r)); const se = 1 / Math.sqrt(n - 3); const zc = normalInv((1 + conf) / 2);
@@ -176,9 +184,9 @@ export function pearson(rawA, rawB, conf = 0.95) {
   return { test: "Correlação de Pearson", n, r, r2: r * r, t, df, p, ci, conf };
 }
 export function spearman(rawA, rawB) {
-  const x = toNums(rawA), y = toNums(rawB); const n = Math.min(x.length, y.length);
+  const { X, Y } = pairNums(rawA, rawB); const n = X.length;
   if (n < 3) return { error: "Mínimo de 3 pares." };
-  const rx = rankWithTies(x.slice(0, n)).ranks, ry = rankWithTies(y.slice(0, n)).ranks;
+  const rx = rankWithTies(X).ranks, ry = rankWithTies(Y).ranks;
   const pr = pearson(rx, ry); return { test: "Correlação de Spearman (ρ)", n, rho: pr.r, t: pr.t, df: pr.df, p: pr.p };
 }
 
