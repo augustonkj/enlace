@@ -1,6 +1,9 @@
 import React, { useState, useRef, useMemo, useEffect, useCallback } from "react";
 import { VW, VH, SNAP_T, setDims, setSizeCtx, SUITE, useModalTrap, C, NODE_TYPES, TYPE_ORDER, MOMENTS, MOMENT_ORDER, NAT_LBL, ESTAB_LBL, KIND_LBL, brandes, parseCSVfull, csvNorm, colIdx, HELP, TOUR, Hint, Menu, MenuItem, REGION_COLORS, wrapText, sizeOf, degreeMap, clipToRect, distToSeg, qPoint, esc, approxW, edgeGeometry, arrowHead, barrierBar, estabBadge, scriptGlyph, calcGlyph, sourceLetter, sourceMark, nodeBody, buildInner, legendMetaFor, snapNode, alignNodes, distributeNodes, depths, forceLayout, arrange, declutter, fillLayout, foldBox, unfoldBox, parseCSV, toGraphML, toGEXF, seedVazio, seedDidatico, seedRedeLivre, seedRedeUnica, seedComparativo, seedCadeia, baseState } from "./lib.js";
 
+// id único mesmo para cadastros no mesmo milissegundo (Date.now() sozinho colide)
+const uid = (prefix) => prefix + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 7);
+
 function EditorTAR({ active = true, viewMode: viewModeProp, setViewMode: setViewModeProp }) {
   const [state, setStateRaw] = useState(seedVazio);
   const [past, setPast] = useState([]);
@@ -292,13 +295,13 @@ function EditorTAR({ active = true, viewMode: viewModeProp, setViewMode: setView
   const onTouchEnd = (evt) => { if (!evt.touches || evt.touches.length < 2) pinchRef.current = null; };
 
   const addNode = (x = VW / 2, y = 120) => {
-    const id = "n" + Date.now();
+    const id = uid("n");
     mut((s) => ({ ...s, nodes: [...s.nodes, { id, label: "Novo actante", x, y, type: newType, emph: false, nat: "indef" }] }));
     setSelNodes([id]); setSelEdge(null); setMode("select");
   };
   const addNodeOfType = (t) => {
     setDims(state.W, state.H);
-    const id = "n" + Date.now();
+    const id = uid("n");
     const cnt = stateRef.current.nodes.length;
     const x = Math.min(VW - 90, 120 + (cnt % 5) * 150);
     const y = Math.min(VH - 130, 110 + Math.floor(cnt / 5) * 110);
@@ -312,7 +315,7 @@ function EditorTAR({ active = true, viewMode: viewModeProp, setViewMode: setView
   const removeEdgeById = (id) => mut((s) => ({ ...s, edges: s.edges.filter((e) => e.id !== id) }));
   const addActante = () => {
     setDims(state.W, state.H);
-    const id = "n" + Date.now();
+    const id = uid("n");
     const cnt = stateRef.current.nodes.length;
     const x = Math.min(VW - 90, 120 + (cnt % 5) * 150), y = Math.min(VH - 130, 110 + Math.floor(cnt / 5) * 110);
     mut((s) => ({ ...s, nodes: [...s.nodes, { id, label: "Novo actante", x, y, type: "mediador", emph: false, nat: "indef" }] }));
@@ -320,7 +323,7 @@ function EditorTAR({ active = true, viewMode: viewModeProp, setViewMode: setView
   const addAssoc = () => {
     const ns = stateRef.current.nodes;
     if (ns.length < 2) return;
-    const id = "e" + Date.now();
+    const id = uid("e");
     mut((s) => ({ ...s, edges: [...s.edges, { id, from: ns[0].id, to: ns[1].id, style: "solida", directed: true, label: "" }] }));
   };
   const csvEsc = (v) => `"${String(v == null ? "" : v).replace(/"/g, '""')}"`;
@@ -460,6 +463,11 @@ table.cent{border-collapse:collapse;width:100%;font-size:12px} table.cent th{tex
   };
   const updateNode = (patch) => setNodes((ns) => ns.map((n) => (n.id === selNodes[0] ? { ...n, ...patch } : n)));
   const updateEdge = (patch) => setEdges((es) => es.map((e) => (e.id === selEdge ? { ...e, ...patch } : e)));
+  // versões SEM histórico, para edição contínua (digitar texto, arrastar slider):
+  // o snapshot é feito uma vez no onFocus/onPointerDown, senão o Ctrl+Z grava 1
+  // entrada por caractere e expulsa o histórico estrutural real.
+  const updateNodeRaw = (patch) => setStateRaw((s) => ({ ...s, nodes: s.nodes.map((n) => (n.id === selNodes[0] ? { ...n, ...patch } : n)) }));
+  const updateEdgeRaw = (patch) => setStateRaw((s) => ({ ...s, edges: s.edges.map((e) => (e.id === selEdge ? { ...e, ...patch } : e)) }));
   const deleteSelected = useCallback(() => {
     if (selEdge) { mut((s) => ({ ...s, edges: s.edges.filter((e) => e.id !== selEdge) })); setSelEdge(null); return; }
     if (selRegion) { mut((s) => ({ ...s, regions: (s.regions || []).filter((r) => r.id !== selRegion) })); setSelRegion(null); return; }
@@ -820,7 +828,7 @@ table.cent{border-collapse:collapse;width:100%;font-size:12px} table.cent th{tex
             <>
               <div style={ui.h}>Nó selecionado</div>
               <span style={ui.label}>Rótulo (Enter = nova linha)</span>
-              <textarea style={{ ...ui.input, resize: "vertical", minHeight: 54 }} value={selNode.label} onChange={(e) => updateNode({ label: e.target.value })} onFocus={pushHist} />
+              <textarea style={{ ...ui.input, resize: "vertical", minHeight: 54 }} value={selNode.label} onChange={(e) => updateNodeRaw({ label: e.target.value })} onFocus={pushHist} />
               <span style={ui.label}>Tipo</span>
               <select style={ui.input} value={selNode.type} onChange={(e) => updateNode({ type: e.target.value })}>{TYPE_ORDER.map((t) => (<option key={t} value={t}>{NODE_TYPES[t].name}</option>))}</select>
               <span style={ui.label}>Natureza{hint("Humano ou não-humano. A TAR trata os dois simetricamente, como actantes que agem.")}</span>
@@ -862,9 +870,9 @@ table.cent{border-collapse:collapse;width:100%;font-size:12px} table.cent th{tex
               {selEdgeObj.kind === "referencia" && (
                 <>
                   <span style={ui.label}>Ganha (amplificação)</span>
-                  <input style={ui.input} value={selEdgeObj.ganha || ""} onChange={(e) => updateEdge({ ganha: e.target.value })} onFocus={pushHist} placeholder="mobilidade, padronização…" />
+                  <input style={ui.input} value={selEdgeObj.ganha || ""} onChange={(e) => updateEdgeRaw({ ganha: e.target.value })} onFocus={pushHist} placeholder="mobilidade, padronização…" />
                   <span style={ui.label}>Perde (redução)</span>
-                  <input style={ui.input} value={selEdgeObj.perde || ""} onChange={(e) => updateEdge({ perde: e.target.value })} onFocus={pushHist} placeholder="matéria, localidade…" />
+                  <input style={ui.input} value={selEdgeObj.perde || ""} onChange={(e) => updateEdgeRaw({ perde: e.target.value })} onFocus={pushHist} placeholder="matéria, localidade…" />
                 </>
               )}
               <span style={ui.label}>Momento da tradução{hint("Fases de Callon ao montar a rede: problematização, interessamento, alistamento e mobilização.")}</span>
@@ -880,9 +888,9 @@ table.cent{border-collapse:collapse;width:100%;font-size:12px} table.cent th{tex
               </select>
               <label style={{ ...ui.chk, margin: "8px 0" }}><input type="checkbox" checked={!!selEdgeObj.directed} onChange={(e) => updateEdge({ directed: e.target.checked })} /> seta (direcionada)</label>
               <span style={ui.label}>Curvatura ({Math.round(selEdgeObj.curve || 0)})</span>
-              <input type="range" min="-60" max="60" value={selEdgeObj.curve || 0} onChange={(e) => updateEdge({ curve: Number(e.target.value) || undefined })} style={{ width: "100%" }} />
+              <input type="range" min="-60" max="60" value={selEdgeObj.curve || 0} onPointerDown={pushHist} onChange={(e) => updateEdgeRaw({ curve: Number(e.target.value) || undefined })} style={{ width: "100%" }} />
               <span style={ui.label}>Rótulo</span>
-              <input style={ui.input} value={selEdgeObj.label || ""} onChange={(e) => updateEdge({ label: e.target.value })} onFocus={pushHist} />
+              <input style={ui.input} value={selEdgeObj.label || ""} onChange={(e) => updateEdgeRaw({ label: e.target.value })} onFocus={pushHist} />
               <span style={ui.label}>Nota de fonte (rastro empírico){hint("De onde veio esta ligação: entrevista (E), documento (D), observação (O) ou outro. Aproxima o diagrama do \u201csiga os atores\u201d.")}</span>
               <select style={ui.input} value={selEdgeObj.fonteTipo || ""} onChange={(e) => updateEdge({ fonteTipo: e.target.value || undefined })}>
                 <option value="">sem fonte</option>
@@ -891,7 +899,7 @@ table.cent{border-collapse:collapse;width:100%;font-size:12px} table.cent th{tex
                 <option value="observacao">observação (O)</option>
                 <option value="outro">outro (·)</option>
               </select>
-              <input style={ui.input} value={selEdgeObj.fonte || ""} onChange={(e) => updateEdge({ fonte: e.target.value })} onFocus={pushHist} placeholder="ex.: entrevista com gestor, 2024" />
+              <input style={ui.input} value={selEdgeObj.fonte || ""} onChange={(e) => updateEdgeRaw({ fonte: e.target.value })} onFocus={pushHist} placeholder="ex.: entrevista com gestor, 2024" />
               <span style={ui.label}>Revelar na etapa (vazio = sempre)</span>
               <input style={ui.input} type="number" min="1" value={selEdgeObj.step || ""} onChange={(e) => updateEdge({ step: e.target.value ? Number(e.target.value) : undefined })} />
               <button style={{ ...ui.btn(), marginTop: 10, width: "100%" }} onClick={deleteSelected}>Remover aresta</button>
@@ -901,7 +909,7 @@ table.cent{border-collapse:collapse;width:100%;font-size:12px} table.cent th{tex
             <>
               <div style={ui.h}>Região / locus</div>
               <span style={ui.label}>Rótulo</span>
-              <input style={ui.input} value={selRegionObj.label} onChange={(e) => mut((s) => ({ ...s, regions: s.regions.map((r) => (r.id === selRegion ? { ...r, label: e.target.value } : r)) }))} onFocus={pushHist} />
+              <input style={ui.input} value={selRegionObj.label} onChange={(e) => setStateRaw((s) => ({ ...s, regions: s.regions.map((r) => (r.id === selRegion ? { ...r, label: e.target.value } : r)) }))} onFocus={pushHist} />
               <span style={ui.label}>Cor</span>
               <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>{REGION_COLORS.map((c) => (<button key={c} onClick={() => mut((s) => ({ ...s, regions: s.regions.map((r) => (r.id === selRegion ? { ...r, color: c } : r)) }))} style={{ width: 26, height: 22, borderRadius: 5, border: selRegionObj.color === c ? "2px solid #1f7a8c" : "1px solid #cfd6dd", background: c, cursor: "pointer" }} />))}<input type="color" value={selRegionObj.color || "#3a6ea5"} onChange={(e) => mut((s) => ({ ...s, regions: s.regions.map((r) => (r.id === selRegion ? { ...r, color: e.target.value } : r)) }))} title="cor personalizada" style={{ width: 28, height: 22, padding: 0, border: "1px solid #cfd6dd", borderRadius: 5, background: "none", cursor: "pointer" }} /></div>
               <button style={{ ...ui.btn(), marginTop: 12, width: "100%" }} onClick={deleteSelected}>Remover região</button>

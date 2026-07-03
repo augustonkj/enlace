@@ -514,6 +514,7 @@ function App() {
   const [showHelp, setShowHelp] = useState(false);
   useEffect(() => { if (!showHelp) return; const h = (e) => { if (e.key === "Escape") setShowHelp(false); }; window.addEventListener("keydown", h); return () => window.removeEventListener("keydown", h); }, [showHelp]);
   const saveTimer = useRef(null);
+  const projectRef = useRef(null); projectRef.current = project; // sempre o projeto atual, p/ flush do autosave
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState(null);
   const fileRef = useRef(null);
@@ -554,6 +555,14 @@ function App() {
     }, 600);
   }, [project]);
 
+  // grava o projeto atual imediatamente (cancela o debounce), para não perder as
+  // últimas edições ao trocar/criar/abrir projeto dentro da janela de 600ms.
+  const flushSave = async () => {
+    clearTimeout(saveTimer.current); saveTimer.current = null;
+    const p = projectRef.current;
+    if (p) { try { await saveKey(STORE.proj(p.id), { ...p, updated: Date.now() }); } catch {} }
+  };
+
   const update = useCallback((patch) => setProject((p) => {
     const np = (typeof patch === "function" ? patch(p) : patch) || {};
     const merged = { ...p, ...np };
@@ -591,11 +600,13 @@ function App() {
   }, [project]);
 
   // ---- projetos ----
-  async function switchProject(id) {
+  async function switchProject(id, flush = true) {
+    if (flush) await flushSave(); else { clearTimeout(saveTimer.current); saveTimer.current = null; }
     const p = await loadKey(STORE.proj(id));
     if (p) { setProject(p); await saveKey(STORE.active, id); setPending(null); setSelExcerpt(null); }
   }
   async function newProject() {
+    await flushSave();
     const p = emptyProject("Projeto " + (index.length + 1));
     await saveKey(STORE.proj(p.id), p);
     const ni = [...index, { id: p.id, name: p.name }];
@@ -603,6 +614,7 @@ function App() {
     setProject(p); setPending(null); setSelExcerpt(null);
   }
   async function loadExample() {
+    await flushSave();
     const p = exampleFor((project && project.method) || "livre");
     await saveKey(STORE.proj(p.id), p);
     const ni = [...index, { id: p.id, name: p.name }];
@@ -610,6 +622,7 @@ function App() {
     setProject(p); setPending(null); setSelExcerpt(null); setTab("codificacao");
   }
   async function loadReliabilityExample() {
+    await flushSave();
     const p = exampleProject();
     await saveKey(STORE.proj(p.id), p);
     const ni = [...index, { id: p.id, name: p.name }];
@@ -627,11 +640,12 @@ function App() {
   }
   async function deleteProject() {
     if (!confirm("Apagar este projeto? Esta ação não pode ser desfeita.")) return;
+    clearTimeout(saveTimer.current); saveTimer.current = null; // não regravar o projeto que será apagado
     const ni = index.filter((x) => x.id !== project.id);
     try { await window.storage.delete(STORE.proj(project.id)); } catch (e) {}
     if (ni.length === 0) { const p = emptyProject("Projeto 1"); await saveKey(STORE.proj(p.id), p); ni.push({ id: p.id, name: p.name }); }
     setIndex(ni); await saveKey(STORE.index, ni);
-    await switchProject(ni[0].id);
+    await switchProject(ni[0].id, false);
   }
 
   // ---- texto ----

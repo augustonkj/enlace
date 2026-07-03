@@ -173,9 +173,12 @@ function DiagramaGeral({ active = true }) {
     else if (selEdge) mut((s) => ({ ...s, edges: s.edges.filter((e) => e.id !== selEdge) }));
     setSel(null); setSelEdge(null);
   };
-  const setNodeText = (t) => mut((s) => ({ ...s, nodes: s.nodes.map((n) => (n.id === sel ? { ...n, text: t } : n)) }));
-  const setNodeColor = (c) => mut((s) => ({ ...s, nodes: s.nodes.map((n) => (n.id === sel ? { ...n, color: c } : n)) }));
-  const setEdgeText = (t) => mut((s) => ({ ...s, edges: s.edges.map((e) => (e.id === selEdge ? { ...e, text: t } : e)) }));
+  const setNodeColor = (c) => mut((s) => ({ ...s, nodes: s.nodes.map((n) => (n.id === sel ? { ...n, color: c } : n)) })); // botões de cor (discreto)
+  // versões SEM histórico p/ edição contínua (digitar, arrastar o seletor de cor):
+  // o snapshot ocorre uma vez no onFocus, senão o Ctrl+Z grava 1 entrada por caractere.
+  const setNodeTextRaw = (t) => setStateRaw((s) => ({ ...s, nodes: s.nodes.map((n) => (n.id === sel ? { ...n, text: t } : n)) }));
+  const setNodeColorRaw = (c) => setStateRaw((s) => ({ ...s, nodes: s.nodes.map((n) => (n.id === sel ? { ...n, color: c } : n)) }));
+  const setEdgeTextRaw = (t) => setStateRaw((s) => ({ ...s, edges: s.edges.map((e) => (e.id === selEdge ? { ...e, text: t } : e)) }));
 
   const exportSVG = () => dl(new Blob([buildGeralSVG(state)], { type: "image/svg+xml" }), "diagrama-geral.svg");
   const exportPDF = () => {
@@ -275,11 +278,11 @@ function DiagramaGeral({ active = true }) {
             <div>
               <div style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.4, color: "#5a6b7a" }}>Nó selecionado</div>
               <label style={lbl}>Texto</label>
-              <textarea style={{ ...inp, minHeight: 60, resize: "vertical" }} value={selNode.text} onChange={(e) => setNodeText(e.target.value)} />
+              <textarea style={{ ...inp, minHeight: 60, resize: "vertical" }} value={selNode.text} onFocus={pushHist} onChange={(e) => setNodeTextRaw(e.target.value)} />
               <label style={lbl}>Cor</label>
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                 {COLORS.map((c) => (<button key={c} onClick={() => setNodeColor(c)} style={{ width: 26, height: 22, borderRadius: 5, border: (selNode.color || "#ffffff") === c ? "2px solid #1f7a8c" : "1px solid #cfd6dd", background: c, cursor: "pointer" }} />))}
-                <input type="color" value={selNode.color || "#ffffff"} onChange={(e) => setNodeColor(e.target.value)} title="cor personalizada" style={{ width: 28, height: 22, padding: 0, border: "1px solid #cfd6dd", borderRadius: 5, background: "none", cursor: "pointer" }} />
+                <input type="color" value={selNode.color || "#ffffff"} onFocus={pushHist} onChange={(e) => setNodeColorRaw(e.target.value)} title="cor personalizada" style={{ width: 28, height: 22, padding: 0, border: "1px solid #cfd6dd", borderRadius: 5, background: "none", cursor: "pointer" }} />
               </div>
               <button style={{ ...mini, marginTop: 12 }} onClick={removeSel}>Excluir nó</button>
             </div>
@@ -287,7 +290,7 @@ function DiagramaGeral({ active = true }) {
             <div>
               <div style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.4, color: "#5a6b7a" }}>Ligação selecionada</div>
               <label style={lbl}>Rótulo</label>
-              <input style={inp} value={selEdgeObj.text} onChange={(e) => setEdgeText(e.target.value)} placeholder="ex.: leva a, causa, inclui…" />
+              <input style={inp} value={selEdgeObj.text} onFocus={pushHist} onChange={(e) => setEdgeTextRaw(e.target.value)} placeholder="ex.: leva a, causa, inclui…" />
               <button style={{ ...mini, marginTop: 12 }} onClick={removeSel}>Excluir ligação</button>
             </div>
           ) : (
