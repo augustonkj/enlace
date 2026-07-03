@@ -109,7 +109,7 @@ function DiagramaGeral({ active = true }) {
   // persistência no "Salvar QualMap"
   useEffect(() => {
     SUITE.getGeral = () => stateRef.current;
-    SUITE.setGeral = (data) => { if (data && Array.isArray(data.nodes)) { setStateRaw({ nodes: data.nodes, edges: data.edges || [] }); setSel(null); setSelEdge(null); } };
+    SUITE.setGeral = (data) => { if (data && Array.isArray(data.nodes)) { pushHist(); setStateRaw({ nodes: data.nodes, edges: data.edges || [] }); setSel(null); setSelEdge(null); } }; // pushHist: diagrama anterior recuperável com Ctrl+Z
     return () => { SUITE.getGeral = null; SUITE.setGeral = null; };
   }, []);
 

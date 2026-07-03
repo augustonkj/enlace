@@ -272,6 +272,24 @@ export function medianTest(groups, names) {
   if (cs.error) return cs;
   return { test: "Teste da Mediana", median: md, k, chi2: cs.chi2, df: cs.df, p: cs.p, minExpected: cs.minExpected, groups: G.map((g, i) => ({ name: (names && names[i]) || `G${i + 1}`, n: g.length, above: g.filter((v) => v > md).length })) };
 }
+// Kruskal-Wallis (k amostras independentes) — ANOVA não-paramétrica por postos.
+// H com correção de empates; p pela qui-quadrado com gl = k−1.
+export function kruskalWallis(groups, names) {
+  const G = groups.map(toNums).filter((g) => g.length); const k = G.length;
+  if (k < 2) return { error: "Informe ao menos 2 grupos." };
+  const all = G.flat(); const N = all.length;
+  if (N < 3) return { error: "Poucas observações." };
+  const { ranks, tieT } = rankWithTies(all);
+  let idx = 0, sr = 0; const rows = [];
+  G.forEach((g, i) => {
+    const R = sum(ranks.slice(idx, idx + g.length)); idx += g.length; sr += R * R / g.length;
+    rows.push({ name: (names && names[i]) || `G${i + 1}`, n: g.length, rankSum: R, rankMean: R / g.length });
+  });
+  let H = 12 / (N * (N + 1)) * sr - 3 * (N + 1);
+  const corr = 1 - tieT / (N ** 3 - N); if (corr > 0) H = H / corr; // correção de empates
+  const df = k - 1; const p = chi2SF(H, df); const eps2 = N > 1 ? H / (N - 1) : 0;
+  return { test: "Kruskal-Wallis (k amostras independentes)", k, N, H, df, p, eps2, groups: rows };
+}
 // Q_KS(λ): cauda da distribuição de Kolmogorov-Smirnov com controle de convergência
 // (Numerical Recipes). Retorna 1 quando a série não converge — ex.: λ=0 (D=0),
 // caso em que amostras idênticas devem dar p=1, e não p=0.

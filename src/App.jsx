@@ -53,6 +53,7 @@ export default function App() {
       try {
         const o = JSON.parse(String(r.result));
         if (!o || !o.__qualmap) { setMsg("este arquivo não é um projeto do QualMap"); setTimeout(() => setMsg(""), 3000); return; }
+        if (!window.confirm("Abrir este projeto vai substituir o trabalho atual em todas as janelas. Continuar?")) { setMsg(""); return; }
         if (o.tar && SUITE.setTar) SUITE.setTar(o.tar);
         if (o.qual && SUITE.setQual) await SUITE.setQual(o.qual);
         if (o.geral && SUITE.setGeral) SUITE.setGeral(o.geral);
