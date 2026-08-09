@@ -14,7 +14,8 @@ npm install
 ```
 
 Isso instala o esbuild (bundler), as bibliotecas empacotadas no app
-(react, react-dom, recharts) e o mammoth (embutido para leitura de `.docx`).
+(react, react-dom, recharts), o mammoth (embutido para leitura de `.docx`) e o
+jsdom, usado só pelos testes.
 
 ## Gerar o HTML
 ```
@@ -106,8 +107,29 @@ imports do `src/` e empacota react/react-dom/recharts no próprio bundle, sem UM
 avulso), embute o `mammoth` como UMD (`window.mammoth`), injeta o shim
 `window.storage` (localStorage) e o CSS de foco visível, e escreve um HTML único.
 
+## Testes
+```
+npm run verificar     # constrói e roda tudo
+npm test              # só roda (usa o Enlace.html já construído)
+node testes/03-corpus.mjs   # uma suíte sozinha, com o detalhe de cada passo
+```
+As suítes em `testes/` carregam o **arquivo único já construído** num DOM
+(jsdom) e clicam na interface como um usuário: trocam de aba, carregam os
+exemplos, importam arquivos, editam células e conferem os números que aparecem
+na tela. São 97 verificações cobrindo a estrutura das janelas, a revisão com
+PRISMA, o corpus de vários documentos, a ida e volta do REFI-QDA, os memos, a
+rede de códigos, a busca no corpus e o comportamento quando o navegador recusa
+gravar (`07-armazenamento.mjs` finge a cota estourando).
+
+O que o jsdom **não** alcança está anotado dentro dos arquivos: ele não faz
+layout (então `getBoundingClientRect` devolve zeros e cliques por coordenada no
+SVG não funcionam) nem seleção de texto do navegador. Essas partes precisam de
+conferência num navegador de verdade.
+
 ## Editar o app
-Altere os arquivos em `src/` e rode `npm run build` de novo.
+Altere os arquivos em `src/` e rode `npm run build` de novo — e depois
+`npm test`, que é barato e pega regressão nas partes frágeis (migração de
+projetos antigos, contagens do PRISMA, ida e volta do REFI-QDA).
 
 ## Observações
 - O `.docx` é lido via `mammoth` (embutido), então a importação de Word funciona offline.

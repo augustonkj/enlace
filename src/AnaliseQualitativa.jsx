@@ -1901,6 +1901,41 @@ function CorpusView({ project, C, addDocs, renameDoc, removeDoc, abrirDoc, setAt
 }
 
 /* ============ CONSULTAS (recuperação entre documentos) ============ */
+/* Busca no texto bruto de todos os documentos — é o que encontra o que ainda
+   NÃO foi codificado. Dobra os caracteres (minúsculas, sem acento) preservando
+   os índices, para o trecho de contexto sair do texto original. */
+function dobrarTexto(s) {
+  let o = "";
+  for (let i = 0; i < s.length; i++) {
+    const d = s[i].normalize("NFD");
+    o += (d[0] || s[i]).toLowerCase();
+  }
+  return o;
+}
+function buscarNoCorpus(project, termo, limitePorDoc = 60) {
+  const alvo = dobrarTexto(String(termo || "").trim());
+  if (alvo.length < 2) return [];
+  return docsDe(project).map((d) => {
+    const texto = d.text || "";
+    const dobrado = dobrarTexto(texto);
+    const achados = [];
+    let i = dobrado.indexOf(alvo);
+    while (i >= 0 && achados.length < limitePorDoc) {
+      const ini = Math.max(0, i - 55), fim = Math.min(texto.length, i + alvo.length + 55);
+      achados.push({
+        pos: i,
+        antes: (ini > 0 ? "…" : "") + texto.slice(ini, i),
+        termo: texto.slice(i, i + alvo.length),
+        depois: texto.slice(i + alvo.length, fim) + (fim < texto.length ? "…" : ""),
+        codificado: (project.excerpts || []).some((e) => e.docId === d.id && i >= e.start && i < e.end),
+      });
+      i = dobrado.indexOf(alvo, i + alvo.length);
+    }
+    const total = achados.length + (i >= 0 ? 1 : 0); // sinaliza corte
+    return { doc: d, achados, cortado: i >= 0, total };
+  }).filter((x) => x.achados.length);
+}
+
 function ConsultasView({ project, codeMap, C, abrirDoc, setTab }) {
   const [sel, setSel] = React.useState([]);            // códigos escolhidos
   const [modo, setModo] = React.useState("qualquer");  // qualquer | todos | nenhum
@@ -1908,6 +1943,10 @@ function ConsultasView({ project, codeMap, C, abrirDoc, setTab }) {
   const [attrChave, setAttrChave] = React.useState("");
   const [attrValor, setAttrValor] = React.useState("");
   const [busca, setBusca] = React.useState("");
+  const [alvoBusca, setAlvoBusca] = React.useState("recortes"); // "recortes" | "corpus"
+  const noCorpus = React.useMemo(() => (alvoBusca === "corpus" ? buscarNoCorpus(project, busca) : []), [alvoBusca, busca, project]);
+  const totalCorpus = noCorpus.reduce((s, x) => s + x.achados.length, 0);
+  const naoCodificados = noCorpus.reduce((s, x) => s + x.achados.filter((a) => !a.codificado).length, 0);
 
   const docs = docsDe(project);
   const attrs = project.atributos || [];
@@ -1921,7 +1960,7 @@ function ConsultasView({ project, codeMap, C, abrirDoc, setTab }) {
   }, [docs, docFiltro, attrChave, attrValor]);
 
   const achados = React.useMemo(() => {
-    const q = busca.trim().toLowerCase();
+    const q = alvoBusca === "recortes" ? busca.trim().toLowerCase() : "";
     return (project.excerpts || []).filter((e) => {
       if (!docsPermitidos.has(e.docId)) return false;
       if (q && !(e.text || "").toLowerCase().includes(q)) return false;
@@ -1931,7 +1970,7 @@ function ConsultasView({ project, codeMap, C, abrirDoc, setTab }) {
       if (modo === "todos") return sel.every((c) => ids.includes(c));
       return !sel.some((c) => ids.includes(c)); // nenhum
     });
-  }, [project.excerpts, docsPermitidos, sel, modo, busca]);
+  }, [project.excerpts, docsPermitidos, sel, modo, busca, alvoBusca]);
 
   const porDoc = React.useMemo(() => {
     const m = {};
@@ -2017,9 +2056,51 @@ function ConsultasView({ project, codeMap, C, abrirDoc, setTab }) {
                 </select>
               )}
             </>)}
-            <input style={{ ...sels, minWidth: 150 }} placeholder="texto dentro do recorte…" value={busca} onChange={(e) => setBusca(e.target.value)} />
+            <input style={{ ...sels, minWidth: 150 }} placeholder={alvoBusca === "corpus" ? "palavra no texto dos documentos…" : "texto dentro do recorte…"} value={busca} onChange={(e) => setBusca(e.target.value)} />
+            <div style={{ display: "flex", border: `1px solid ${C.line}`, borderRadius: 4, overflow: "hidden" }}>
+              {[["recortes", "nos recortes"], ["corpus", "no texto"]].map(([v, l]) => (
+                <button key={v} onClick={() => setAlvoBusca(v)} title={v === "corpus" ? "procura no texto bruto de todos os documentos — inclusive no que ainda não foi codificado" : "procura só dentro dos recortes já codificados"}
+                  style={{ border: "none", padding: "4px 9px", fontSize: 11.5, cursor: "pointer", fontWeight: 600, background: alvoBusca === v ? C.accent : "#fff", color: alvoBusca === v ? "#fff" : C.sub }}>{l}</button>
+              ))}
+            </div>
             <Btn onClick={exportar}>CSV</Btn>
           </div>
+
+          {alvoBusca === "corpus" && (
+            <div style={{ marginBottom: 10 }}>
+              {busca.trim().length < 2 ? (
+                <div style={{ fontSize: 12.5, color: C.sub }}>Digite ao menos duas letras para procurar no texto de todos os documentos.</div>
+              ) : (
+                <>
+                  <div style={{ fontSize: 12.5, marginBottom: 6 }}>
+                    <b>{totalCorpus}</b> ocorrência(s) de “{busca.trim()}” em <b>{noCorpus.length}</b> documento(s)
+                    {naoCodificados > 0 && <span style={{ color: "#b06a1f" }}> · <b>{naoCodificados}</b> fora de qualquer recorte</span>}
+                  </div>
+                  <div style={{ maxHeight: 340, overflowY: "auto", border: `1px solid ${C.line}`, borderRadius: 6 }}>
+                    {noCorpus.map(({ doc, achados, cortado }) => (
+                      <div key={doc.id} style={{ borderBottom: `1px solid ${C.line}` }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", background: C.panel }}>
+                          <b style={{ fontSize: 12.5 }}>{doc.name}</b>
+                          <span style={{ fontSize: 11.5, color: C.sub }}>{achados.length}{cortado ? "+" : ""} ocorrência(s)</span>
+                          <div style={{ flex: 1 }} />
+                          <button onClick={() => { abrirDoc(doc.id); setTab("codificacao"); }} style={{ ...btnStyle(C), fontSize: 10.5, padding: "2px 8px" }}>abrir e codificar</button>
+                        </div>
+                        {achados.map((a, i) => (
+                          <div key={i} style={{ padding: "5px 12px", fontSize: 12.5, lineHeight: 1.5, borderTop: `1px solid ${C.line}` }}>
+                            <span style={{ color: C.sub }}>{a.antes}</span>
+                            <mark style={{ background: a.codificado ? "#cde8d5" : "#ffe9b8", padding: "0 2px", borderRadius: 2 }}>{a.termo}</mark>
+                            <span style={{ color: C.sub }}>{a.depois}</span>
+                            {!a.codificado && <span style={{ fontSize: 10.5, color: "#b06a1f", marginLeft: 6 }}>não codificado</span>}
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+                    {!noCorpus.length && <div style={{ padding: 14, fontSize: 12.5, color: C.sub }}>Nada encontrado no texto dos documentos.</div>}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
 
           <div style={{ fontSize: 12.5, color: C.ink, marginBottom: 6 }}>
             <b>{achados.length}</b> recorte(s) em <b>{porDoc.length}</b> documento(s)
