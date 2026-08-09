@@ -1115,6 +1115,25 @@ function salvarLocal(chave, texto) {
   }
 }
 
+/* Chaves gravadas quando o programa se chamava QualMap. Em vez de ler as duas
+   para sempre, migra uma vez: copia para o nome novo e apaga a antiga. Quem já
+   usava não perde nada e, depois da primeira abertura, o nome antigo some do
+   navegador. (O marcador __qualmap dentro dos arquivos .json salvos continua
+   sendo aceito na abertura — esses arquivos estão no computador do usuário e
+   podem ser abertos daqui a anos.) */
+function migrarChaveAntiga(antiga, nova) {
+  try {
+    const ls = window.localStorage;
+    const velho = ls.getItem(antiga);
+    if (velho == null) return false;
+    if (ls.getItem(nova) == null) { const r = salvarLocal(nova, velho); if (!r.ok) return false; }
+    ls.removeItem(antiga);
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
 // quanto já foi ocupado (aproximado: 2 bytes por caractere, como o UTF-16 do navegador)
 function usoLocal() {
   try {
@@ -1230,4 +1249,4 @@ function BarrasH({ dados, largRotulo = 150, corPadrao = "#1f7a8c", alturaBarra =
 
 function setSizeCtx(v) { SIZE_CTX = v; }
 
-export { BarrasH, escalaBonita, numBR, salvarLocal, usoLocal, formatarBytes, AvisoArmazenamento, VW, VH, SNAP_T, setDims, setSizeCtx, SUITE, useModalTrap, C, NODE_TYPES, TYPE_ORDER, MOMENTS, MOMENT_ORDER, NAT_LBL, ESTAB_LBL, KIND_LBL, brandes, parseCSVfull, csvNorm, colIdx, HELP, TOUR, Hint, Menu, MenuItem, REGION_COLORS, wrapText, sizeOf, degreeMap, clipToRect, distToSeg, qPoint, esc, approxW, edgeGeometry, arrowHead, barrierBar, estabBadge, scriptGlyph, calcGlyph, sourceLetter, sourceMark, nodeBody, buildInner, legendMetaFor, snapNode, alignNodes, distributeNodes, depths, forceLayout, arrange, declutter, fillLayout, foldBox, unfoldBox, parseCSV, toGraphML, toGEXF, seedVazio, seedDidatico, seedRedeLivre, seedRedeUnica, seedComparativo, seedCadeia, baseState };
+export { migrarChaveAntiga, BarrasH, escalaBonita, numBR, salvarLocal, usoLocal, formatarBytes, AvisoArmazenamento, VW, VH, SNAP_T, setDims, setSizeCtx, SUITE, useModalTrap, C, NODE_TYPES, TYPE_ORDER, MOMENTS, MOMENT_ORDER, NAT_LBL, ESTAB_LBL, KIND_LBL, brandes, parseCSVfull, csvNorm, colIdx, HELP, TOUR, Hint, Menu, MenuItem, REGION_COLORS, wrapText, sizeOf, degreeMap, clipToRect, distToSeg, qPoint, esc, approxW, edgeGeometry, arrowHead, barrierBar, estabBadge, scriptGlyph, calcGlyph, sourceLetter, sourceMark, nodeBody, buildInner, legendMetaFor, snapNode, alignNodes, distributeNodes, depths, forceLayout, arrange, declutter, fillLayout, foldBox, unfoldBox, parseCSV, toGraphML, toGEXF, seedVazio, seedDidatico, seedRedeLivre, seedRedeUnica, seedComparativo, seedCadeia, baseState };

@@ -10,7 +10,7 @@ function boxStats(a) {
   return { q1, med, q3, lo, hi, min: v[0], max: v[n - 1] };
 }
 import * as ST from "./stats.js";
-import { salvarLocal, AvisoArmazenamento } from "./lib.js";
+import { salvarLocal, AvisoArmazenamento, migrarChaveAntiga } from "./lib.js";
 
 const CHART_COLORS = ["#1f7a8c", "#7a5ea8", "#2e7d4f", "#b06a1f", "#c0392b", "#16a085"];
 const PALETTES = {
@@ -36,7 +36,6 @@ function histogram(x, nbins = 8) {
 */
 
 const LSK = "enlace_quant_v2";
-const LSK_ANTIGA = "qualmap_quant_v2"; // chave do nome antigo, só para leitura
 
 // catálogo de testes. impl=false => no roteiro (ainda não implementado).
 const TESTS = [
@@ -514,7 +513,7 @@ function AnaliseQuantitativa({ active = true }) {
   };
 
   // restaurar / autosave (grade)
-  useEffect(() => { try { const s = window.localStorage.getItem(LSK) || window.localStorage.getItem(LSK_ANTIGA); if (s) { const o = JSON.parse(s); if (o && o.grid && Array.isArray(o.grid.headers)) setGrid(o.grid); } } catch {} }, []);
+  useEffect(() => { migrarChaveAntiga("qualmap_quant_v2", LSK); try { const s = window.localStorage.getItem(LSK); if (s) { const o = JSON.parse(s); if (o && o.grid && Array.isArray(o.grid.headers)) setGrid(o.grid); } } catch {} }, []);
   useEffect(() => { const t = setTimeout(() => { const r = salvarLocal(LSK, JSON.stringify({ grid })); setErroLocal(r.ok ? null : r); }, 600); return () => clearTimeout(t); }, [grid]);
 
   const data = useMemo(() => gridToData(grid), [grid]);
