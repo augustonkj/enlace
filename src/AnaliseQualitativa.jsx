@@ -113,15 +113,93 @@ function emptyProject(name = "Novo projeto") {
   return {
     id: uid(),
     name,
-    text: "",
+    docs: [{ id: "d1", name: "Documento 1", text: "", attrs: {} }], // corpus do projeto
+    docAtual: "d1",
+    atributos: [],    // nomes dos atributos declarados para os documentos
     codes: [],        // {id, name, color, desc}
-    excerpts: [],     // {id, start, end, text, codeIds:[], memo}
+    excerpts: [],     // {id, docId, start, end, text, codeIds:[], memo}
     categories: [],   // {id, name, tipo:'emergente'|'apriori', desc, codeIds:[]}
     metatexts: [],    // {id, title, categoryId|null, body}
+    memos: [],        // {id, title, body, updated, alvo:{tipo,id}|null}
     wordExclude: [],  // palavras removidas da nuvem/frequentes
     updated: Date.now(),
   };
 }
+
+/* ---- corpus: helpers e migração do formato antigo (um texto por projeto) ----
+   Projetos salvos antes desta versão têm project.text; viram um documento único,
+   e os recortes sem docId passam a pertencer a ele. */
+function migrarProjeto(p) {
+  if (!p || typeof p !== "object") return p;
+  const base = { atributos: [], memos: [], wordExclude: [] };
+  if (Array.isArray(p.docs) && p.docs.length) {
+    const docAtual = p.docs.some((d) => d.id === p.docAtual) ? p.docAtual : p.docs[0].id;
+    const d0 = p.docs[0].id;
+    return { ...base, ...p, docAtual, excerpts: (p.excerpts || []).map((e) => (e.docId ? e : { ...e, docId: d0 })) };
+  }
+  const doc = { id: "d1", name: p.name || "Documento 1", text: typeof p.text === "string" ? p.text : "", attrs: {} };
+  const { text, ...resto } = p;
+  return { ...base, ...resto, docs: [doc], docAtual: "d1", excerpts: (p.excerpts || []).map((e) => ({ ...e, docId: "d1" })) };
+}
+/* ---- PDF: texto com as páginas mapeadas ----
+   O pdf.js roda aqui SEM Worker: o módulo do worker é embutido e pendurado em
+   globalThis.pdfjsWorker, que é o gancho de "fake worker" da própria biblioteca.
+   Sem isso não haveria como ler PDF num arquivo único aberto por duplo clique. */
+let _pdfjs = null;
+async function carregarPdfjs() {
+  if (!_pdfjs) {
+    _pdfjs = (async () => {
+      const [lib, worker] = await Promise.all([
+        import("pdfjs-dist/build/pdf.min.mjs"),
+        import("pdfjs-dist/build/pdf.worker.min.mjs"),
+      ]);
+      globalThis.pdfjsWorker = worker;
+      try { lib.GlobalWorkerOptions.workerSrc = ""; } catch {}
+      return lib;
+    })();
+  }
+  return _pdfjs;
+}
+async function textoDePDF(buffer, nome) {
+  try {
+    const lib = await carregarPdfjs();
+    const pdf = await lib.getDocument({ data: new Uint8Array(buffer), isEvalSupported: false, useSystemFonts: false }).promise;
+    const partes = [], paginas = [];
+    let pos = 0;
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const pg = await pdf.getPage(i);
+      const cont = await pg.getTextContent();
+      let t = "";
+      cont.items.forEach((it) => {
+        t += it.str || "";
+        if (it.hasEOL) t += "\n";
+        else if (it.str && !/\s$/.test(it.str)) t += " ";
+      });
+      const bloco = t.replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim() + "\n\n";
+      paginas.push({ n: i, inicio: pos, fim: pos + bloco.length });
+      partes.push(bloco); pos += bloco.length;
+    }
+    return { text: partes.join(""), paginas };
+  } catch (e) {
+    try { window.alert(`Não foi possível ler o PDF "${nome}". Se ele for digitalizado (imagem), não há texto para extrair.`); } catch {}
+    return { text: "", paginas: null };
+  }
+}
+// em que página do documento cai um deslocamento do texto
+function paginaDoOffset(doc, off) {
+  const ps = doc && doc.paginas;
+  if (!ps || !ps.length) return null;
+  const p = ps.find((x) => off >= x.inicio && off < x.fim);
+  return p ? p.n : ps[ps.length - 1].n;
+}
+const docsDe = (p) => (p && Array.isArray(p.docs) ? p.docs : []);
+const DOC_VAZIO = { id: "", name: "", text: "", attrs: {} };
+const docAtualDe = (p) => docsDe(p).find((d) => d.id === (p && p.docAtual)) || docsDe(p)[0] || DOC_VAZIO;
+const textoDe = (p) => docAtualDe(p).text || "";
+const exDoDoc = (p, docId) => (p.excerpts || []).filter((e) => e.docId === docId);
+const exDoAtual = (p) => exDoDoc(p, docAtualDe(p).id);
+const textoTodo = (p) => docsDe(p).map((d) => d.text || "").join("\n\n");
+const nomeDoc = (p, docId) => (docsDe(p).find((d) => d.id === docId) || {}).name || "—";
 function exampleProject() {
   const text = `ENTREVISTA — Experiência de trabalho remoto
 (participante: profissional, 34 anos; entrevista semiestruturada)
@@ -295,11 +373,11 @@ const QHELP = [
 // Referência: Cohen, J. (1960). A coefficient of agreement for nominal scales.
 // Educational and Psychological Measurement, 20(1), 37-46. Bandas de interpretação:
 // Landis, J. R., & Koch, G. G. (1977). Biometrics, 33(1), 159-174.
-function coderCharLabels(project) {
-  const text = (project && project.text) || "";
+function coderCharLabels(project, doc) {
+  const text = (doc && doc.text) || "";
   const labels = new Array(text.length).fill(null);
   const byId = {}; ((project && project.codes) || []).forEach((c) => { byId[c.id] = c; });
-  for (const ex of (project && project.excerpts) || []) {
+  for (const ex of exDoDoc(project, doc.id)) {
     const cid = (ex.codeIds && ex.codeIds[0]) || null;
     const code = cid ? byId[cid] : null;
     const name = code ? (code.name || "").trim().toLowerCase() : "";
@@ -310,9 +388,25 @@ function coderCharLabels(project) {
   return labels.map((l) => (l == null ? "—" : l));
 }
 function interCoderKappa(projA, projB) {
-  const ta = (projA && projA.text) || "", tb = (projB && projB.text) || "";
-  if (!(ta.length > 0 && ta === tb)) return { sameText: false };
-  const a = coderCharLabels(projA), b = coderCharLabels(projB), n = a.length;
+  // pareia os documentos dos dois codificadores pelo nome; com um documento de
+  // cada lado, pareia direto. Só entram os pares cujo texto é idêntico.
+  const A = migrarProjeto(projA), B = migrarProjeto(projB);
+  const da = docsDe(A), db = docsDe(B);
+  const pares = [];
+  if (da.length === 1 && db.length === 1) pares.push([da[0], db[0]]);
+  else da.forEach((x) => {
+    const y = db.find((z) => (z.name || "").trim().toLowerCase() === (x.name || "").trim().toLowerCase());
+    if (y) pares.push([x, y]);
+  });
+  const usados = pares.filter(([x, y]) => (x.text || "").length > 0 && x.text === y.text);
+  if (!usados.length) return { sameText: false };
+  const a = [], b = [];
+  usados.forEach(([x, y]) => {
+    const la = coderCharLabels(A, x), lb = coderCharLabels(B, y);
+    for (let i = 0; i < la.length; i++) { a.push(la[i]); b.push(lb[i]); }
+  });
+  const n = a.length;
+  const nDocs = usados.length;
   const cats = Array.from(new Set([...a, ...b]));
   const countA = {}, countB = {};
   let agree = 0, unionCoded = 0, unionAgree = 0;
@@ -330,7 +424,7 @@ function interCoderKappa(projA, projB) {
   const kappa = pe < 1 ? (po - pe) / (1 - pe) : 1;
   const poUnion = unionCoded ? unionAgree / unionCoded : 0;
   return {
-    sameText: true, n, po, pe, kappa, poUnion, unionCoded, perCode,
+    sameText: true, n, nDocs, po, pe, kappa, poUnion, unionCoded, perCode,
     codesA: Object.keys(countA).filter((c) => c !== "—"),
     codesB: Object.keys(countB).filter((c) => c !== "—"),
   };
@@ -390,13 +484,24 @@ function escapeHTML(s) {
 function buildStandaloneHTML(project, opts = {}) {
   const MET = METHODS[(project && project.method) || "livre"] || METHODS.livre;
   const codeMap = Object.fromEntries(project.codes.map((c) => [c.id, c]));
-  const segs = buildSegments(project.text, project.excerpts);
-  const textHTML = segs.map((seg) => {
+  // um bloco por documento do corpus, cada um com o próprio texto codificado
+  const marcar = (segs) => segs.map((seg) => {
     const c0 = seg.covering[0] ? codeMap[seg.covering[0].codeIds[0]] : null;
     const names = seg.covering.flatMap((e) => e.codeIds.map((id) => codeMap[id]?.name)).filter(Boolean).join(", ");
     const style = c0 ? `background:${c0.color}33;border-bottom:2px solid ${c0.color};` : "";
     const title = names ? ` title="${escapeHTML(names)}"` : "";
     return `<span style="${style}border-radius:2px"${title}>${escapeHTML(seg.text)}</span>`;
+  }).join("");
+  const docs = docsDe(project);
+  const varios = docs.length > 1;
+  const textHTML = docs.map((d) => {
+    const corpo = marcar(buildSegments(d.text || "", exDoDoc(project, d.id)));
+    const attrs = Object.entries(d.attrs || {}).filter(([, v]) => String(v).trim());
+    const cab = varios
+      ? `<h3 style="margin:18px 0 4px;font-size:15px;border-bottom:1px solid #e3e9ee;padding-bottom:3px">${escapeHTML(d.name)} <span style="font-weight:400;color:#999;font-size:12px">(${exDoDoc(project, d.id).length} recortes${d.paginas ? ` · ${d.paginas.length} páginas` : ""})</span></h3>`
+        + (attrs.length ? `<div style="font-size:12px;color:#777;margin-bottom:4px">${attrs.map(([k, v]) => `${escapeHTML(k)}: ${escapeHTML(v)}`).join(" · ")}</div>` : "")
+      : "";
+    return cab + corpo;
   }).join("");
   const codeRows = project.codes.map((c) => {
     const n = project.excerpts.filter((e) => e.codeIds.includes(c.id)).length;
@@ -510,6 +615,17 @@ const METHODS = {
 };
 const METHOD_ORDER = ["livre", "conteudo", "atd", "fenomenologia", "discurso", "grounded", "narrativas", "bourdieu"];
 
+// as abas Documentos e Consultas existem em todos os métodos (não mudam de nome)
+Object.values(METHODS).forEach((m) => {
+  m.tabs = { corpus: "Documentos", recuperacao: "Consultas", ...m.tabs };
+  if (!m.show.includes("corpus")) m.show = ["corpus", ...m.show];
+  if (!m.show.includes("recuperacao")) {
+    const i = m.show.indexOf("categorias");
+    m.show = i >= 0 ? [...m.show.slice(0, i + 1), "recuperacao", ...m.show.slice(i + 1)] : [...m.show, "recuperacao"];
+  }
+});
+
+
 function App() {
   const [project, setProject] = useState(null);
   const [index, setIndex] = useState([]); // [{id,name}]
@@ -518,12 +634,12 @@ function App() {
   const [cmpB, setCmpB] = useState(null);
   async function onPickB(id) {
     if (!id) { setCmpB(null); return; }
-    try { const p = await loadKey(STORE.proj(id)); if (p) setCmpB(p); } catch (e) {}
+    try { const p = await loadKey(STORE.proj(id)); if (p) setCmpB(migrarProjeto(p)); } catch (e) {}
   }
   function onFileB(e) {
     const f = e.target.files?.[0]; if (!f) return;
     const r = new FileReader();
-    r.onload = () => { const o = parseJSON(String(r.result)); if (o && typeof o.text === "string") setCmpB(o); else { try { window.alert("Arquivo de projeto inválido."); } catch {} } };
+    r.onload = () => { const o = parseJSON(String(r.result)); if (o && (typeof o.text === "string" || Array.isArray(o.docs))) setCmpB(migrarProjeto(o)); else { try { window.alert("Arquivo de projeto inválido."); } catch {} } };
     r.readAsText(f); e.target.value = "";
   }
   const [pending, setPending] = useState(null); // {start,end,text}
@@ -552,7 +668,7 @@ function App() {
         await saveKey(STORE.active, proj.id);
       }
       setIndex(idx);
-      setProject(proj);
+      setProject(migrarProjeto(proj));
     })();
   }, []);
 
@@ -582,7 +698,7 @@ function App() {
   function chooseMethod(m) {
     if (project && project.isExample) {
       const ex = exampleFor(m); ex.id = project.id; ex.isExample = true; // troca o exemplo, mesmo "slot"
-      setProject(ex); setIndex((idx) => idx.map((x) => (x.id === ex.id ? { id: ex.id, name: ex.name } : x)));
+      setProject(migrarProjeto(ex)); setIndex((idx) => idx.map((x) => (x.id === ex.id ? { id: ex.id, name: ex.name } : x)));
       setPending(null); setSelExcerpt(null); setTab("codificacao");
     } else {
       update({ method: m });
@@ -604,7 +720,7 @@ function App() {
       for (const id in data.projects) { try { await saveKey(STORE.proj(id), data.projects[id]); } catch {} }
       try { await saveKey(STORE.index, idx); } catch {}
       const activeId = data.active && data.projects[data.active] ? data.active : (idx[0] && idx[0].id);
-      if (activeId) { try { await saveKey(STORE.active, activeId); } catch {} const p = data.projects[activeId]; if (p) { setProject(p); setIndex(idx); setPending(null); setSelExcerpt(null); } }
+      if (activeId) { try { await saveKey(STORE.active, activeId); } catch {} const p = data.projects[activeId]; if (p) { setProject(migrarProjeto(p)); setIndex(idx); setPending(null); setSelExcerpt(null); } }
     };
     return () => { SUITE.getQual = null; SUITE.setQual = null; };
   }, [project]);
@@ -612,7 +728,7 @@ function App() {
   // ---- projetos ----
   async function switchProject(id) {
     const p = await loadKey(STORE.proj(id));
-    if (p) { setProject(p); await saveKey(STORE.active, id); setPending(null); setSelExcerpt(null); }
+    if (p) { setProject(migrarProjeto(p)); await saveKey(STORE.active, id); setPending(null); setSelExcerpt(null); }
   }
   async function newProject() {
     const p = emptyProject("Projeto " + (index.length + 1));
@@ -622,19 +738,19 @@ function App() {
     setProject(p); setPending(null); setSelExcerpt(null);
   }
   async function loadExample() {
-    const p = exampleFor((project && project.method) || "livre");
+    const p = migrarProjeto(exampleFor((project && project.method) || "livre"));
     await saveKey(STORE.proj(p.id), p);
     const ni = [...index, { id: p.id, name: p.name }];
     setIndex(ni); await saveKey(STORE.index, ni); await saveKey(STORE.active, p.id);
     setProject(p); setPending(null); setSelExcerpt(null); setTab("codificacao");
   }
   async function loadReliabilityExample() {
-    const p = exampleProject();
+    const p = migrarProjeto(exampleProject());
     await saveKey(STORE.proj(p.id), p);
     const ni = [...index, { id: p.id, name: p.name }];
     setIndex(ni); await saveKey(STORE.index, ni); await saveKey(STORE.active, p.id);
     setProject(p); setPending(null); setSelExcerpt(null);
-    setCmpB(exampleCodingB()); setTab("confiabilidade");
+    setCmpB(migrarProjeto(exampleCodingB())); setTab("confiabilidade");
   }
   function excludeWord(word) {
     const w = (word || "").toLowerCase();
@@ -653,34 +769,67 @@ function App() {
     await switchProject(ni[0].id);
   }
 
-  // ---- texto ----
+  // ---- corpus: acrescentar documentos (nunca substitui o que já foi codificado) ----
+  function addDocs(novos) {
+    const lista = (novos || []).filter((d) => d && typeof d.text === "string");
+    if (!lista.length) return;
+    update((p) => {
+      const atual = docAtualDe(p);
+      const soVazio = docsDe(p).length === 1 && !(atual.text || "").trim() && !(p.excerpts || []).length;
+      const feitos = lista.map((d) => ({ id: uid(), name: d.name || "Documento", text: d.text, attrs: d.attrs || {}, paginas: d.paginas || null }));
+      if (soVazio) { const docs = feitos.map((d, i) => (i === 0 ? { ...d, id: atual.id } : d)); return { docs, docAtual: docs[0].id }; }
+      return { docs: [...docsDe(p), ...feitos], docAtual: feitos[0].id };
+    });
+    setPending(null); setSelExcerpt(null);
+  }
   function onFile(e) {
-    const f = e.target.files?.[0];
-    if (!f) { return; }
-    if (project.text && project.excerpts.length) {
-      let ok = true; try { ok = window.confirm("Importar um novo texto vai substituir o texto atual e remover os recortes existentes. Continuar?"); } catch {}
-      if (!ok) { e.target.value = ""; return; }
-    }
-    const name = (f.name || "").toLowerCase();
-    if (name.endsWith(".docx") && typeof window !== "undefined" && window.mammoth) {
+    const arquivos = [...(e.target.files || [])];
+    if (!arquivos.length) return;
+    const lidos = new Array(arquivos.length);
+    let faltam = arquivos.length;
+    const pronto = (i, nome, texto, paginas) => { lidos[i] = { name: nome, text: texto, paginas: paginas || null }; if (--faltam === 0) addDocs(lidos.filter(Boolean)); };
+    arquivos.forEach((f, i) => {
+      const nome = (f.name || "documento").replace(/\.[^.]+$/, "");
       const r = new FileReader();
-      r.onload = async () => {
-        try {
-          const out = await window.mammoth.extractRawText({ arrayBuffer: r.result });
-          update({ text: (out && out.value) || "", excerpts: [] }); setPending(null); setSelExcerpt(null);
-        } catch (err) { try { window.alert("Não foi possível ler este .docx."); } catch {} }
-      };
-      r.readAsArrayBuffer(f);
-    } else {
-      const r = new FileReader();
-      r.onload = () => { update({ text: String(r.result), excerpts: [] }); setPending(null); setSelExcerpt(null); };
-      r.readAsText(f);
-    }
+      if (/\.docx$/i.test(f.name) && typeof window !== "undefined" && window.mammoth) {
+        r.onload = async () => {
+          try { const out = await window.mammoth.extractRawText({ arrayBuffer: r.result }); pronto(i, nome, (out && out.value) || ""); }
+          catch (err) { try { window.alert(`Não foi possível ler "${f.name}".`); } catch {} pronto(i, nome, ""); }
+        };
+        r.readAsArrayBuffer(f);
+      } else if (/\.pdf$/i.test(f.name)) {
+        r.onload = async () => { const o = await textoDePDF(r.result, f.name); pronto(i, nome, o.text, o.paginas); };
+        r.readAsArrayBuffer(f);
+      } else {
+        r.onload = () => pronto(i, nome, String(r.result));
+        r.readAsText(f);
+      }
+    });
     e.target.value = "";
   }
   function applyPaste() {
-    update({ text: pasteVal, excerpts: [] });
-    setPasteMode(false); setPasteVal(""); setPending(null); setSelExcerpt(null);
+    addDocs([{ name: "Texto colado", text: pasteVal }]);
+    setPasteMode(false); setPasteVal("");
+  }
+  function renameDoc(id, nome) { update((p) => ({ docs: docsDe(p).map((d) => (d.id === id ? { ...d, name: nome } : d)) })); }
+  function removeDoc(id) {
+    const n = exDoDoc(project, id).length;
+    if (n) { let ok = true; try { ok = window.confirm(`Remover "${nomeDoc(project, id)}"? Os ${n} recortes feitos nele serão perdidos.`); } catch {} if (!ok) return; }
+    update((p) => {
+      const docs = docsDe(p).filter((d) => d.id !== id);
+      const finais = docs.length ? docs : [{ id: uid(), name: "Documento 1", text: "", attrs: {} }];
+      return { docs: finais, docAtual: finais[0].id, excerpts: (p.excerpts || []).filter((e) => e.docId !== id) };
+    });
+    setPending(null); setSelExcerpt(null);
+  }
+  function abrirDoc(id) { update({ docAtual: id }); setPending(null); setSelExcerpt(null); }
+  function setAttr(docId, chave, valor) { update((p) => ({ docs: docsDe(p).map((d) => (d.id === docId ? { ...d, attrs: { ...(d.attrs || {}), [chave]: valor } } : d)) })); }
+  function addAtributo(nome) {
+    const n = (nome || "").trim(); if (!n) return;
+    update((p) => ((p.atributos || []).includes(n) ? {} : { atributos: [...(p.atributos || []), n] }));
+  }
+  function removeAtributo(nome) {
+    update((p) => ({ atributos: (p.atributos || []).filter((a) => a !== nome), docs: docsDe(p).map((d) => { const a = { ...(d.attrs || {}) }; delete a[nome]; return { ...d, attrs: a }; }) }));
   }
 
   // ---- seleção de trecho ----
@@ -692,7 +841,7 @@ function App() {
     const b = absOffset(range.endContainer, range.endOffset);
     if (a == null || b == null) return;
     const s = Math.min(a, b), en = Math.max(a, b);
-    if (en > s) { setPending({ start: s, end: en, text: project.text.slice(s, en) }); setSelExcerpt(null); }
+    if (en > s) { setPending({ start: s, end: en, text: textoDe(project).slice(s, en) }); setSelExcerpt(null); }
   }
 
   // ---- códigos ----
@@ -709,11 +858,12 @@ function App() {
   function assignCode(codeId) {
     if (!pending || !codeId) return;
     update((p) => {
-      const same = p.excerpts.find((e) => e.start === pending.start && e.end === pending.end);
+      const dAtual = docAtualDe(p).id;
+      const same = p.excerpts.find((e) => e.docId === dAtual && e.start === pending.start && e.end === pending.end);
       if (same) {
         return { excerpts: p.excerpts.map((e) => e === same ? { ...e, codeIds: [...new Set([...e.codeIds, codeId])] } : e) };
       }
-      const ex = { id: uid(), start: pending.start, end: pending.end, text: pending.text, codeIds: [codeId], memo: "" };
+      const ex = { id: uid(), docId: docAtualDe(p).id, start: pending.start, end: pending.end, text: pending.text, codeIds: [codeId], memo: "" };
       return { excerpts: [...p.excerpts, ex] };
     });
     setPending(null);
@@ -773,7 +923,7 @@ function App() {
     update((p) => ({ categories: p.categories.filter((c) => c.id !== id) }));
   }
   function clearProject() {
-    const hasContent = project.text || project.codes.length || project.excerpts.length || project.categories.length || project.metatexts.length;
+    const hasContent = textoTodo(project) || project.codes.length || project.excerpts.length || project.categories.length || project.metatexts.length;
     if (hasContent) { let ok = true; try { ok = window.confirm("Limpar este projeto? Texto, códigos, recortes, categorias e metatextos serão apagados (o nome é mantido)."); } catch {} if (!ok) return; }
     update(() => ({ text: "", codes: [], excerpts: [], categories: [], metatexts: [], wordExclude: [] }));
     setPending(null); setSelExcerpt(null); setTab("codificacao");
@@ -859,7 +1009,7 @@ function App() {
         alert("Arquivo inválido. Use um arquivo .codifica.json salvo por esta ferramenta.");
         return;
       }
-      const p = { ...emptyProject(), ...obj, id: uid() };
+      const p = migrarProjeto({ ...emptyProject(), ...obj, id: uid() });
       await saveKey(STORE.proj(p.id), p);
       const ni = [...index, { id: p.id, name: p.name }];
       setIndex(ni); await saveKey(STORE.index, ni); await saveKey(STORE.active, p.id);
@@ -871,7 +1021,7 @@ function App() {
 
   // ---- derivados ----
   const codeMap = useMemo(() => Object.fromEntries((project?.codes || []).map((c) => [c.id, c])), [project]);
-  const segments = useMemo(() => project ? buildSegments(project.text, project.excerpts) : [], [project]);
+  const segments = useMemo(() => (project ? buildSegments(textoDe(project), exDoAtual(project)) : []), [project]);
   const codeFreq = useMemo(() => {
     if (!project) return [];
     return project.codes.map((c) => ({
@@ -1000,10 +1150,16 @@ function App() {
       </div>
 
       <div style={{ flex: 1, overflow: "hidden", display: "flex" }}>
+        {activeTab === "corpus" && (
+          <CorpusView {...{ project, C, addDocs, renameDoc, removeDoc, abrirDoc, setAttr, addAtributo, removeAtributo, onFile, setTab }} />
+        )}
+        {activeTab === "recuperacao" && (
+          <ConsultasView {...{ project, codeMap, C, abrirDoc, setTab }} />
+        )}
         {activeTab === "codificacao" && (
           <CodificacaoView {...{ project, segments, codeMap, C, pending, setPending, selExcerpt, setSelExcerpt,
             addCode, assignCode, removeCode, renameCode, setCodeColor, mergeCode, removeExcerpt, setExcerptMemo, toggleCodeOnExcerpt,
-            pasteMode, setPasteMode, pasteVal, setPasteVal, applyPaste, fileRef, onFile, onMouseUp }} />
+            pasteMode, setPasteMode, pasteVal, setPasteVal, applyPaste, fileRef, onFile, onMouseUp, abrirDoc, setTab }} />
         )}
         {activeTab === "categorias" && (
           <CategoriasView {...{ project, codeFreq, C, addCategory, updateCategory, removeCategory, toggleCodeInCategory, catHint: MET.catHint, catLabel: MET.tabs.categorias }} />
@@ -1034,7 +1190,7 @@ function Btn({ children, onClick, danger }) {
 function CodificacaoView(props) {
   const { project, segments, codeMap, C, pending, setPending, selExcerpt, setSelExcerpt,
     addCode, assignCode, removeCode, renameCode, setCodeColor, mergeCode, removeExcerpt, setExcerptMemo, toggleCodeOnExcerpt,
-    pasteMode, setPasteMode, pasteVal, setPasteVal, applyPaste, fileRef, onFile, onMouseUp } = props;
+    pasteMode, setPasteMode, pasteVal, setPasteVal, applyPaste, fileRef, onFile, onMouseUp, abrirDoc, setTab } = props;
   const [newCode, setNewCode] = useState("");
   const ex = selExcerpt ? project.excerpts.find((e) => e.id === selExcerpt) : null;
   const [q, setQ] = useState("");
@@ -1043,12 +1199,12 @@ function CodificacaoView(props) {
   const [mergeInto, setMergeInto] = useState("");
   const scrollRef = useRef(null);
   const matchPositions = useMemo(() => {
-    if (!q.trim() || !project.text) return [];
-    const res = []; const t = project.text.toLowerCase(); const needle = q.toLowerCase();
+    if (!q.trim() || !textoDe(project)) return [];
+    const res = []; const t = textoDe(project).toLowerCase(); const needle = q.toLowerCase();
     let idx = t.indexOf(needle);
     while (idx >= 0) { res.push(idx); idx = t.indexOf(needle, idx + needle.length); }
     return res;
-  }, [q, project.text]);
+  }, [q, project]);
   useEffect(() => { setMi(0); }, [q]);
   useEffect(() => {
     if (!matchPositions.length || !scrollRef.current) return;
@@ -1073,7 +1229,7 @@ function CodificacaoView(props) {
     <>
       {/* texto */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", borderRight: `1px solid ${C.line}` }}>
-        {!project.text && !pasteMode && (
+        {!textoDe(project) && !pasteMode && (
           <div style={{ margin: "auto", textAlign: "center", fontFamily: "system-ui", color: C.sub }}>
             <p style={{ marginBottom: 16, fontSize: 14 }}>Comece pelo material a analisar.</p>
             <label style={{ ...btnStyle(C), display: "inline-block", marginRight: 8, background: C.accent, color: "#fff", border: "none", padding: "8px 16px" }}>
@@ -1092,10 +1248,26 @@ function CodificacaoView(props) {
             </div>
           </div>
         )}
-        {project.text && !pasteMode && (
+        {textoDe(project) && !pasteMode && (
           <>
+            {docsDe(project).length > 1 && (
+              <div style={{ padding: "5px 12px", borderBottom: `1px solid ${C.line}`, background: C.panel, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                <span style={{ fontSize: 10.5, color: C.sub, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.4 }}>Documento</span>
+                {docsDe(project).map((d) => {
+                  const on = d.id === project.docAtual;
+                  const n = exDoDoc(project, d.id).length;
+                  return (
+                    <button key={d.id} onClick={() => abrirDoc(d.id)} title={`${n} recorte(s)`}
+                      style={{ ...btnStyle(C), fontSize: 11, padding: "3px 9px", background: on ? C.accent : "#fff", color: on ? "#fff" : C.ink, fontWeight: on ? 700 : 400 }}>
+                      {d.name}{n ? ` (${n})` : ""}
+                    </button>
+                  );
+                })}
+                <button onClick={() => setTab("corpus")} style={{ ...btnStyle(C), fontSize: 11, padding: "3px 9px" }}>gerenciar…</button>
+              </div>
+            )}
             <div style={{ padding: "6px 12px", fontFamily: "system-ui", fontSize: 11, color: C.sub, borderBottom: `1px solid ${C.line}`, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-              <span>{project.text.length} caracteres</span>
+              <span>{textoDe(project).length} caracteres</span>
               <span>{project.excerpts.length} recortes</span>
               <label style={{ ...btnStyle(C), padding: "3px 9px", fontSize: 11, cursor: "pointer" }} title="substituir o texto por um arquivo .txt ou .docx">
                 Importar texto<input type="file" accept=".txt,.docx,text/plain" onChange={onFile} style={{ display: "none" }} />
@@ -1287,11 +1459,11 @@ function QuantitativoView({ project, codeFreq, catFreq, cooc, codeMap, C, exclud
   const totalRec = project.excerpts.length;
   const excluded = useMemo(() => new Set((project.wordExclude || []).map((w) => w.toLowerCase())), [project.wordExclude]);
   const topWords = useMemo(() => {
-    const toks = (project.text || "").toLowerCase().match(/[\p{L}]+/gu) || [];
+    const toks = textoTodo(project).toLowerCase().match(/[\p{L}]+/gu) || [];
     const counts = {};
     for (const w of toks) { if (w.length < 3 || STOPWORDS_PT.has(w) || excluded.has(w)) continue; counts[w] = (counts[w] || 0) + 1; }
     return Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 30);
-  }, [project.text, excluded]);
+  }, [project, excluded]);
   const cloudW = 580, cloudH = 360;
   const cloud = useMemo(() => buildWordCloud(topWords, cloudW, cloudH), [topWords]);
   const cloudRef = useRef(null);
@@ -1542,8 +1714,269 @@ function MetatextoView({ project, C, addMetatext, updateMetatext, removeMetatext
 }
 
 
+
+
+
+/* ============ DOCUMENTOS (corpus do projeto) ============ */
+function CorpusView({ project, C, addDocs, renameDoc, removeDoc, abrirDoc, setAttr, addAtributo, removeAtributo, onFile, setTab }) {
+  const [novoAttr, setNovoAttr] = React.useState("");
+  const docs = docsDe(project);
+  const attrs = project.atributos || [];
+  const inp = { fontFamily: "system-ui", fontSize: 12.5, padding: "4px 7px", border: `1px solid ${C.line}`, borderRadius: 4, width: "100%", boxSizing: "border-box" };
+  const th = { fontSize: 11, fontWeight: 700, color: C.sub, textAlign: "left", padding: "5px 7px", borderBottom: `1px solid ${C.line}`, whiteSpace: "nowrap" };
+  const td = { padding: "3px 7px", borderBottom: `1px solid ${C.line}`, fontSize: 12.5 };
+  return (
+    <div style={{ flex: 1, overflow: "auto", padding: 16 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
+        <div style={{ fontWeight: 700, fontSize: 14 }}>Documentos do projeto</div>
+        <span style={{ fontSize: 11.5, color: C.sub }}>{docs.length} documento(s) · {(project.excerpts || []).length} recortes no total</span>
+        <label style={btnStyle(C)}>+ Documentos (.txt, .docx, .pdf)
+          <input type="file" accept=".txt,.docx,.pdf,text/plain" multiple onChange={onFile} style={{ display: "none" }} />
+        </label>
+        <Btn onClick={() => addDocs([{ name: "Documento " + (docs.length + 1), text: "" }])}>+ vazio</Btn>
+      </div>
+      <div style={{ fontSize: 11.5, color: C.sub, marginBottom: 12, lineHeight: 1.6 }}>
+        Todos os documentos compartilham o mesmo livro de códigos e as mesmas categorias. Dá para selecionar vários arquivos de uma vez —
+        cada um vira um documento, e o nome do arquivo vira o nome dele. Os <b>atributos</b> (escola, turno, sexo, ano…) servem para
+        comparar a codificação entre grupos na aba Consultas.
+      </div>
+
+      <div style={{ overflowX: "auto", border: `1px solid ${C.line}`, borderRadius: 6 }}>
+        <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 620 }}>
+          <thead><tr>
+            <th style={th}>Documento</th><th style={{ ...th, textAlign: "right" }}>Caracteres</th><th style={{ ...th, textAlign: "right" }}>Recortes</th>
+            {attrs.map((a) => (
+              <th key={a} style={th}>{a}
+                <button onClick={() => removeAtributo(a)} title={`remover o atributo "${a}"`}
+                  style={{ marginLeft: 4, border: "none", background: "none", color: "#b3402f", cursor: "pointer", fontSize: 12 }}>✕</button>
+              </th>
+            ))}
+            <th style={th} />
+          </tr></thead>
+          <tbody>
+            {docs.map((d) => {
+              const n = exDoDoc(project, d.id).length;
+              const aberto = d.id === project.docAtual;
+              return (
+                <tr key={d.id} style={{ background: aberto ? C.accentSoft : "transparent" }}>
+                  <td style={td}><input style={inp} value={d.name} onChange={(e) => renameDoc(d.id, e.target.value)} /></td>
+                  <td style={{ ...td, textAlign: "right", color: C.sub }}>{(d.text || "").length.toLocaleString("pt-BR")}</td>
+                  <td style={{ ...td, textAlign: "right", fontWeight: n ? 700 : 400, color: n ? C.ink : C.sub }}>{n}</td>
+                  {attrs.map((a) => (
+                    <td key={a} style={td}><input style={inp} value={(d.attrs || {})[a] || ""} placeholder="—" onChange={(e) => setAttr(d.id, a, e.target.value)} /></td>
+                  ))}
+                  <td style={{ ...td, whiteSpace: "nowrap" }}>
+                    <Btn onClick={() => { abrirDoc(d.id); setTab("codificacao"); }}>{aberto ? "aberto" : "abrir"}</Btn>{" "}
+                    <Btn onClick={() => removeDoc(d.id)} danger>remover</Btn>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 12, flexWrap: "wrap" }}>
+        <span style={{ fontSize: 12, color: C.sub }}>Novo atributo:</span>
+        <input style={{ ...inp, width: 180 }} value={novoAttr} placeholder="ex.: escola, turno, sexo, ano"
+          onChange={(e) => setNovoAttr(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") { addAtributo(novoAttr); setNovoAttr(""); } }} />
+        <Btn onClick={() => { addAtributo(novoAttr); setNovoAttr(""); }}>adicionar</Btn>
+      </div>
+    </div>
+  );
+}
+
+/* ============ CONSULTAS (recuperação entre documentos) ============ */
+function ConsultasView({ project, codeMap, C, abrirDoc, setTab }) {
+  const [sel, setSel] = React.useState([]);            // códigos escolhidos
+  const [modo, setModo] = React.useState("qualquer");  // qualquer | todos | nenhum
+  const [docFiltro, setDocFiltro] = React.useState("");
+  const [attrChave, setAttrChave] = React.useState("");
+  const [attrValor, setAttrValor] = React.useState("");
+  const [busca, setBusca] = React.useState("");
+
+  const docs = docsDe(project);
+  const attrs = project.atributos || [];
+  const valoresDe = (chave) => [...new Set(docs.map((d) => ((d.attrs || {})[chave] || "").trim()).filter(Boolean))].sort();
+
+  const docsPermitidos = React.useMemo(() => {
+    let ds = docs;
+    if (docFiltro) ds = ds.filter((d) => d.id === docFiltro);
+    if (attrChave && attrValor) ds = ds.filter((d) => ((d.attrs || {})[attrChave] || "").trim() === attrValor);
+    return new Set(ds.map((d) => d.id));
+  }, [docs, docFiltro, attrChave, attrValor]);
+
+  const achados = React.useMemo(() => {
+    const q = busca.trim().toLowerCase();
+    return (project.excerpts || []).filter((e) => {
+      if (!docsPermitidos.has(e.docId)) return false;
+      if (q && !(e.text || "").toLowerCase().includes(q)) return false;
+      if (!sel.length) return true;
+      const ids = e.codeIds || [];
+      if (modo === "qualquer") return sel.some((c) => ids.includes(c));
+      if (modo === "todos") return sel.every((c) => ids.includes(c));
+      return !sel.some((c) => ids.includes(c)); // nenhum
+    });
+  }, [project.excerpts, docsPermitidos, sel, modo, busca]);
+
+  const porDoc = React.useMemo(() => {
+    const m = {};
+    achados.forEach((e) => { m[e.docId] = (m[e.docId] || 0) + 1; });
+    return Object.entries(m).sort((a, b) => b[1] - a[1]);
+  }, [achados]);
+
+  // comparação por grupo: código × valor do atributo
+  const [grupoChave, setGrupoChave] = React.useState("");
+  const cruzamento = React.useMemo(() => {
+    if (!grupoChave) return null;
+    const grupos = valoresDe(grupoChave);
+    if (!grupos.length) return null;
+    const grupoDoDoc = {};
+    docs.forEach((d) => { grupoDoDoc[d.id] = ((d.attrs || {})[grupoChave] || "").trim(); });
+    const nDocs = {}; grupos.forEach((g) => (nDocs[g] = docs.filter((d) => grupoDoDoc[d.id] === g).length));
+    const linhas = (project.codes || []).map((c) => {
+      const cel = {}; grupos.forEach((g) => (cel[g] = 0));
+      (project.excerpts || []).forEach((e) => {
+        const g = grupoDoDoc[e.docId];
+        if (g && (e.codeIds || []).includes(c.id)) cel[g] += 1;
+      });
+      return { code: c, cel, total: grupos.reduce((s, g) => s + cel[g], 0) };
+    }).filter((l) => l.total > 0).sort((a, b) => b.total - a.total);
+    return { grupos, linhas, nDocs };
+  }, [grupoChave, project, docs]);
+
+  const exportar = () => {
+    const linhas = [["documento", "codigos", "recorte", "memo"].join(";")];
+    achados.forEach((e) => linhas.push([nomeDoc(project, e.docId), (e.codeIds || []).map((i) => (codeMap[i] || {}).name || i).join(", "), e.text, e.memo || ""]
+      .map((v) => `"${String(v).replace(/"/g, '""')}"`).join(";")));
+    const b = new Blob(["﻿" + linhas.join("\n")], { type: "text/csv;charset=utf-8" });
+    const u = URL.createObjectURL(b); const a = document.createElement("a"); a.href = u; a.download = "recortes.csv"; a.click(); setTimeout(() => URL.revokeObjectURL(u), 1500);
+  };
+
+  const sels = { fontFamily: "system-ui", fontSize: 12.5, padding: "4px 7px", border: `1px solid ${C.line}`, borderRadius: 4, background: "#fff" };
+  const th = { fontSize: 11, fontWeight: 700, color: C.sub, textAlign: "left", padding: "4px 7px", borderBottom: `1px solid ${C.line}` };
+
+  return (
+    <div style={{ flex: 1, overflow: "auto", padding: 16 }}>
+      <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>Consultas no corpus</div>
+      <div style={{ fontSize: 11.5, color: C.sub, marginBottom: 12 }}>
+        Recupera os recortes de todos os documentos ao mesmo tempo — é o que responde “onde mais isso aparece?”.
+      </div>
+
+      <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "flex-start" }}>
+        <div style={{ flex: "0 1 260px", minWidth: 220, border: `1px solid ${C.line}`, borderRadius: 6, padding: 10 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.sub, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 }}>Códigos</div>
+          <div style={{ maxHeight: 190, overflowY: "auto" }}>
+            {(project.codes || []).map((c) => (
+              <label key={c.id} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, padding: "2px 0", cursor: "pointer" }}>
+                <input type="checkbox" checked={sel.includes(c.id)}
+                  onChange={(e) => setSel(e.target.checked ? [...sel, c.id] : sel.filter((x) => x !== c.id))} />
+                <span style={{ width: 10, height: 10, borderRadius: 2, background: c.color, display: "inline-block" }} />
+                {c.name}
+              </label>
+            ))}
+            {!(project.codes || []).length && <div style={{ fontSize: 12, color: C.sub }}>nenhum código ainda</div>}
+          </div>
+          <div style={{ marginTop: 8, display: "flex", gap: 4, flexWrap: "wrap" }}>
+            {[["qualquer", "qualquer (OU)"], ["todos", "todos no mesmo recorte (E)"], ["nenhum", "nenhum (NÃO)"]].map(([v, l]) => (
+              <button key={v} onClick={() => setModo(v)} style={{ ...btnStyle(C), background: modo === v ? C.accent : "#fff", color: modo === v ? "#fff" : C.ink, fontSize: 11 }}>{l}</button>
+            ))}
+          </div>
+          {sel.length > 0 && <Btn onClick={() => setSel([])}>limpar seleção</Btn>}
+        </div>
+
+        <div style={{ flex: "1 1 380px", minWidth: 300 }}>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 8 }}>
+            <select style={sels} value={docFiltro} onChange={(e) => setDocFiltro(e.target.value)}>
+              <option value="">todos os documentos</option>
+              {docs.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+            </select>
+            {attrs.length > 0 && (<>
+              <select style={sels} value={attrChave} onChange={(e) => { setAttrChave(e.target.value); setAttrValor(""); }}>
+                <option value="">— atributo —</option>
+                {attrs.map((a) => <option key={a} value={a}>{a}</option>)}
+              </select>
+              {attrChave && (
+                <select style={sels} value={attrValor} onChange={(e) => setAttrValor(e.target.value)}>
+                  <option value="">qualquer valor</option>
+                  {valoresDe(attrChave).map((v) => <option key={v} value={v}>{v}</option>)}
+                </select>
+              )}
+            </>)}
+            <input style={{ ...sels, minWidth: 150 }} placeholder="texto dentro do recorte…" value={busca} onChange={(e) => setBusca(e.target.value)} />
+            <Btn onClick={exportar}>CSV</Btn>
+          </div>
+
+          <div style={{ fontSize: 12.5, color: C.ink, marginBottom: 6 }}>
+            <b>{achados.length}</b> recorte(s) em <b>{porDoc.length}</b> documento(s)
+            {porDoc.length > 0 && <span style={{ color: C.sub }}> · {porDoc.map(([id, n]) => `${nomeDoc(project, id)} (${n})`).join(" · ")}</span>}
+          </div>
+
+          <div style={{ maxHeight: 340, overflowY: "auto", border: `1px solid ${C.line}`, borderRadius: 6 }}>
+            {achados.map((e) => (
+              <div key={e.id} style={{ padding: "8px 10px", borderBottom: `1px solid ${C.line}` }}>
+                <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", marginBottom: 3 }}>
+                  <button onClick={() => { abrirDoc(e.docId); setTab("codificacao"); }} title="abrir este documento"
+                    style={{ ...btnStyle(C), fontSize: 10.5, padding: "2px 7px" }}>{nomeDoc(project, e.docId)}</button>
+                  {(() => { const d = docsDe(project).find((x) => x.id === e.docId); const pg = d && paginaDoOffset(d, e.start); return pg ? <span style={{ fontSize: 10.5, color: C.sub }}>p. {pg}</span> : null; })()}
+                  {(e.codeIds || []).map((id) => {
+                    const c = codeMap[id]; if (!c) return null;
+                    return <span key={id} style={{ background: c.color, color: "#fff", fontSize: 10.5, padding: "1px 7px", borderRadius: 9 }}>{c.name}</span>;
+                  })}
+                </div>
+                <div style={{ fontSize: 12.5, lineHeight: 1.5 }}>“{e.text}”</div>
+                {e.memo && <div style={{ fontSize: 11.5, color: C.sub, marginTop: 3 }}>memo: {e.memo}</div>}
+              </div>
+            ))}
+            {!achados.length && <div style={{ padding: 14, fontSize: 12.5, color: C.sub }}>Nenhum recorte com esses filtros.</div>}
+          </div>
+        </div>
+      </div>
+
+      {attrs.length > 0 && (
+        <div style={{ marginTop: 20 }}>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 6 }}>
+            <div style={{ fontWeight: 700, fontSize: 13 }}>Comparação por grupo</div>
+            <select style={sels} value={grupoChave} onChange={(e) => setGrupoChave(e.target.value)}>
+              <option value="">— escolha um atributo —</option>
+              {attrs.map((a) => <option key={a} value={a}>{a}</option>)}
+            </select>
+            <span style={{ fontSize: 11.5, color: C.sub }}>quantos recortes de cada código aparecem em cada grupo de documentos</span>
+          </div>
+          {cruzamento && (
+            <div style={{ overflowX: "auto", border: `1px solid ${C.line}`, borderRadius: 6 }}>
+              <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 420 }}>
+                <thead><tr>
+                  <th style={th}>Código</th>
+                  {cruzamento.grupos.map((g) => <th key={g} style={{ ...th, textAlign: "right" }}>{g}<div style={{ fontWeight: 400, color: C.sub }}>{cruzamento.nDocs[g]} doc.</div></th>)}
+                  <th style={{ ...th, textAlign: "right" }}>total</th>
+                </tr></thead>
+                <tbody>
+                  {cruzamento.linhas.map(({ code, cel, total }) => (
+                    <tr key={code.id}>
+                      <td style={{ padding: "3px 7px", fontSize: 12.5, borderBottom: `1px solid ${C.line}` }}>
+                        <span style={{ width: 9, height: 9, borderRadius: 2, background: code.color, display: "inline-block", marginRight: 5 }} />{code.name}
+                      </td>
+                      {cruzamento.grupos.map((g) => <td key={g} style={{ padding: "3px 7px", fontSize: 12.5, textAlign: "right", borderBottom: `1px solid ${C.line}` }}>{cel[g] || "—"}</td>)}
+                      <td style={{ padding: "3px 7px", fontSize: 12.5, textAlign: "right", fontWeight: 700, borderBottom: `1px solid ${C.line}` }}>{total}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <div style={{ fontSize: 11, color: C.sub, padding: "6px 8px" }}>
+                São contagens brutas de recortes: grupos com mais documentos tendem a somar mais. Para comparar, olhe também o número de documentos de cada grupo.
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+
 return App;
 })();
-
 
 export { AnaliseQualitativa };
