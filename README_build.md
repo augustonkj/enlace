@@ -87,7 +87,11 @@ Saída: `Enlace.html` (~1,6 MB). É só abrir no navegador.
   devolve a geometria uma única vez e os mesmos números alimentam o desenho na
   tela (JSX interativo) e a exportação (string SVG) — sem isso o que se vê e o
   que se exporta divergem. Seleção múltipla por Shift+clique, com `alinhar()` e
-  `distribuir()` próprios (usam o tamanho real de cada forma) e grade opcional.
+  `distribuir()` próprios (usam o tamanho real de cada forma), laço de seleção
+  arrastando no fundo, camadas (a ordem de `nodes[]` é a ordem de pintura) e
+  grade opcional. As ligações são `<path>`: retas, curvas (Bézier quadrática) ou
+  em cotovelo — `caminhoLigacao()` devolve também a direção do último trecho,
+  senão a seta aponta torto na curva.
 - `AnaliseQuantitativa.jsx` — janela quantitativa: testes estatísticos sobre
   dados colados/abertos ali, independente das demais.
 - `App.jsx` — casca com as 3 abas + sub-abas da Qualitativa + salvar/abrir
@@ -124,7 +128,7 @@ node testes/03-corpus.mjs   # uma suíte sozinha, com o detalhe de cada passo
 As suítes em `testes/` carregam o **arquivo único já construído** num DOM
 (jsdom) e clicam na interface como um usuário: trocam de aba, carregam os
 exemplos, importam arquivos, editam células e conferem os números que aparecem
-na tela. São 137 verificações cobrindo a estrutura das janelas, a revisão com
+na tela. São 147 verificações cobrindo a estrutura das janelas, a revisão com
 PRISMA, o corpus de vários documentos, a ida e volta do REFI-QDA, os memos, a
 rede de códigos, a busca no corpus, o comportamento quando o navegador recusa
 gravar (`07-armazenamento.mjs` finge a cota estourando) e os 11 tipos de

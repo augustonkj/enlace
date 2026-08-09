@@ -20,7 +20,9 @@ const pb = (re) => [...vis().querySelectorAll("button")].find((x) => re.test(x.t
 const btnTitulo = (re) => [...vis().querySelectorAll("button")].find((x) => re.test(x.getAttribute("title") || ""));
 const svg = () => vis().querySelector("svg");
 // grupo de nó = tem forma e NÃO tem linha (grupo de ligação tem line, e rect do rótulo)
-const nosG = () => [...svg().querySelectorAll("g")].filter((g) => g.querySelector("rect, ellipse, polygon") && !g.querySelector("line"));
+// grupo de nó = tem forma e NÃO tem caminho (o grupo de ligação tem path,
+// e também polygon da seta e rect do rótulo, então não dá para filtrar por forma)
+const nosG = () => [...svg().querySelectorAll("g")].filter((g) => g.querySelector("rect, ellipse, polygon") && !g.querySelector("path"));
 const ok = (c, msg) => { console.log((c ? "  ok  " : "  FALHA ") + msg); if (!c) process.exitCode = 1; };
 const ptDown = (el, extra = {}) => el.dispatchEvent(new W.MouseEvent("pointerdown", { bubbles: true, ...extra }));
 
@@ -90,12 +92,63 @@ if (btnAlinhar) {
 }
 
 // ligação: tracejado e pontas
-const linhas = [...svg().querySelectorAll("g")].filter((g) => g.querySelector("line"));
+const linhas = [...svg().querySelectorAll("g")].filter((g) => g.querySelector("path"));
 if (linhas.length) {
   ptDown(linhas[0]);
   await wait(500);
   const t3 = vis().textContent.replace(/\s+/g, " ");
   ok(/Ligação selecionada/.test(t3) && /Espessura/.test(t3) && /tracejada/.test(t3), "painel da ligação traz espessura e tracejado");
+}
+
+// ---- laço, camadas e traçado das ligações ----
+await click(pb(/^Projeto/), 300);
+await click(pb(/Carregar exemplo/), 900);
+
+// traçados: o exemplo já traz reta, curva e cotovelo
+const ds = [...svg().querySelectorAll("path")].map((p) => p.getAttribute("d") || "");
+ok(ds.some((d) => /Q /.test(d)), "ligação curva desenhada (Bézier)");
+ok(ds.some((d) => (d.match(/L /g) || []).length >= 3), "ligação em cotovelo desenhada (ângulos retos)");
+ok(ds.some((d) => (d.match(/L /g) || []).length === 1), "ligação reta continua existindo");
+const setas = svg().querySelectorAll("polygon").length;
+console.log("  pontas de seta no desenho:", setas);
+ok(setas >= 5, "setas nas pontas, inclusive a de mão dupla");
+
+// laço: arrastar no fundo seleciona quem estiver dentro
+const el = svg();
+el.getBoundingClientRect = () => ({ x: 0, y: 0, top: 0, left: 0, right: 1000, bottom: 620, width: 1000, height: 620 });
+el.dispatchEvent(new W.MouseEvent("pointerdown", { bubbles: true, clientX: 5, clientY: 5 }));
+await wait(200);
+W.dispatchEvent(new W.MouseEvent("pointermove", { bubbles: true, clientX: 995, clientY: 615 }));
+await wait(500);
+const tLaco = vis().textContent.replace(/\s+/g, " ");
+console.log("  " + (tLaco.match(/\d+ nós selecionados/) || ["(sem contagem)"])[0]);
+ok(/5 nós selecionados/.test(tLaco), "laço cobrindo tudo seleciona os 5 nós");
+ok(!!svg().querySelector('rect[stroke-dasharray="4 3"]'), "retângulo do laço aparece enquanto arrasta");
+W.dispatchEvent(new W.MouseEvent("pointerup", { bubbles: true }));
+await wait(400);
+ok(!svg().querySelector('rect[stroke-dasharray="4 3"]'), "o retângulo some ao soltar");
+
+// laço pequeno não deve selecionar nada
+el.dispatchEvent(new W.MouseEvent("pointerdown", { bubbles: true, clientX: 2, clientY: 2 }));
+W.dispatchEvent(new W.MouseEvent("pointermove", { bubbles: true, clientX: 6, clientY: 6 }));
+await wait(400);
+W.dispatchEvent(new W.MouseEvent("pointerup", { bubbles: true }));
+await wait(400);
+ok(!/nós selecionados/.test(vis().textContent), "clique no vazio limpa a seleção");
+
+// camadas: o ÚLTIMO nó é o que está por cima; mandá-lo para trás precisa mudar a ordem
+const ultimo = nosG()[nosG().length - 1];
+ptDown(ultimo);
+await wait(400);
+const ordemAntes = nosG().map((g) => g.querySelector("text").textContent).join("|");
+const btnTras = btnTitulo(/enviar para trás/);
+ok(!!btnTras, "botão de camada existe");
+if (btnTras) {
+  await click(btnTras, 600);
+  const ordemDepois = nosG().map((g) => g.querySelector("text").textContent).join("|");
+  console.log("  ordem antes :", ordemAntes.slice(0, 60));
+  console.log("  ordem depois:", ordemDepois.slice(0, 60));
+  ok(ordemAntes !== ordemDepois, "enviar para trás muda a ordem de pintura");
 }
 
 const f = errors.filter((s) => !/opaque origins/.test(s));

@@ -36,7 +36,7 @@ const PONTAS = [["fim", "→"], ["ambas", "↔"], ["nenhuma", "—"]];
 
 const uid = () => "g" + Math.random().toString(36).slice(2, 8);
 const NO_PADRAO = { shape: "arred", color: "#ffffff", stroke: "#34495e", textColor: "#2b3a48", font: "sistema", fontSize: 14, bold: false, italic: false, w: 0, h: 0 };
-const LIG_PADRAO = { color: "#7a8b99", width: 1.6, dash: false, arrow: "fim" };
+const LIG_PADRAO = { color: "#7a8b99", width: 1.6, dash: false, arrow: "fim", curva: "reta" };
 const noCompleto = (n) => ({ ...NO_PADRAO, ...n });
 const ligCompleta = (e) => ({ ...LIG_PADRAO, ...e });
 
@@ -53,7 +53,8 @@ function seedGeral() {
       { id: "e1", from: "n1", to: "n2", text: "leva a" },
       { id: "e2", from: "n1", to: "n3", text: "relaciona" },
       { id: "e3", from: "n1", to: "n4", text: "" },
-      { id: "e4", from: "n3", to: "n5", text: "inclui", dash: true },
+      { id: "e4", from: "n3", to: "n5", text: "inclui", dash: true, curva: "cotovelo" },
+      { id: "e5", from: "n2", to: "n4", text: "compara", curva: "curva", arrow: "ambas" },
     ],
   };
 }
@@ -97,15 +98,45 @@ function edgePoint(cx, cy, hw, hh, tx, ty) {
   const s = Math.min(sx, sy);
   return { x: cx + dx * s, y: cy + dy * s };
 }
+/* Traçado da ligação: reta, curva ou cotovelo. Devolve o caminho (d), o ponto
+   do rótulo e as direções das pontas — a seta precisa apontar na direção do
+   ÚLTIMO trecho, não da reta entre os centros, senão fica torta na curva. */
+function caminhoLigacao(e, a, b) {
+  const sinal = (v) => (v < 0 ? -1 : 1);
+  if (e.curva === "cotovelo") {
+    const dx = b.x - a.x, dy = b.y - a.y;
+    if (Math.abs(dx) >= Math.abs(dy)) {
+      const p1 = { x: a.x + sinal(dx) * (a.w / 2), y: a.y };
+      const p2 = { x: b.x - sinal(dx) * (b.w / 2), y: b.y };
+      const mx = (p1.x + p2.x) / 2;
+      return { d: `M ${p1.x} ${p1.y} L ${mx} ${p1.y} L ${mx} ${p2.y} L ${p2.x} ${p2.y}`, p1, p2,
+        mid: { x: mx, y: (p1.y + p2.y) / 2 }, antesFim: { x: mx, y: p2.y }, antesIni: { x: mx, y: p1.y } };
+    }
+    const p1 = { x: a.x, y: a.y + sinal(dy) * (a.h / 2) };
+    const p2 = { x: b.x, y: b.y - sinal(dy) * (b.h / 2) };
+    const my = (p1.y + p2.y) / 2;
+    return { d: `M ${p1.x} ${p1.y} L ${p1.x} ${my} L ${p2.x} ${my} L ${p2.x} ${p2.y}`, p1, p2,
+      mid: { x: (p1.x + p2.x) / 2, y: my }, antesFim: { x: p2.x, y: my }, antesIni: { x: p1.x, y: my } };
+  }
+  const p1 = edgePoint(a.x, a.y, a.w / 2, a.h / 2, b.x, b.y);
+  const p2 = edgePoint(b.x, b.y, b.w / 2, b.h / 2, a.x, a.y);
+  if (e.curva === "curva") {
+    const dx = p2.x - p1.x, dy = p2.y - p1.y, L = Math.hypot(dx, dy) || 1;
+    const k = Math.min(90, L * 0.22);
+    const c = { x: (p1.x + p2.x) / 2 - (dy / L) * k, y: (p1.y + p2.y) / 2 + (dx / L) * k };
+    return { d: `M ${p1.x} ${p1.y} Q ${c.x.toFixed(1)} ${c.y.toFixed(1)} ${p2.x} ${p2.y}`, p1, p2,
+      mid: { x: (p1.x + 2 * c.x + p2.x) / 4, y: (p1.y + 2 * c.y + p2.y) / 4 }, antesFim: c, antesIni: c };
+  }
+  return { d: `M ${p1.x} ${p1.y} L ${p2.x} ${p2.y}`, p1, p2,
+    mid: { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 }, antesFim: p1, antesIni: p2 };
+}
 function geometry(state) {
   const byId = {}; state.nodes.forEach((n) => (byId[n.id] = { ...noCompleto(n), ...nodeDims(n) }));
   const edges = state.edges.map((raw) => {
     const e = ligCompleta(raw);
     const a = byId[e.from], b = byId[e.to];
     if (!a || !b) return null;
-    const p1 = edgePoint(a.x, a.y, a.w / 2, a.h / 2, b.x, b.y);
-    const p2 = edgePoint(b.x, b.y, b.w / 2, b.h / 2, a.x, a.y);
-    return { ...e, p1, p2, mid: { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 } };
+    return { ...e, ...caminhoLigacao(e, a, b) };
   }).filter(Boolean);
   return { byId, edges };
 }
@@ -136,6 +167,15 @@ function alinhar(nodes, ids, como) {
   }
   return nodes.map((n) => (set[n.id] ? { ...n, ...set[n.id] } : n));
 }
+// a ordem em nodes[] é a ordem de pintura: o último é o que fica por cima
+function paraFrente(nodes, ids) {
+  const fica = nodes.filter((n) => !ids.includes(n.id));
+  return [...fica, ...nodes.filter((n) => ids.includes(n.id))];
+}
+function paraTras(nodes, ids) {
+  const fica = nodes.filter((n) => !ids.includes(n.id));
+  return [...nodes.filter((n) => ids.includes(n.id)), ...fica];
+}
 function distribuir(nodes, ids, eixo) {
   const alvo = nodes.filter((n) => ids.includes(n.id));
   if (alvo.length < 3) return nodes;
@@ -158,9 +198,9 @@ function buildGeralSVG(state, { withBg = true, grade = 0 } = {}) {
   }
   edges.forEach((e) => {
     const tr = e.dash ? ` stroke-dasharray="${Math.max(4, e.width * 3)} ${Math.max(3, e.width * 2)}"` : "";
-    out.push(`<line x1="${e.p1.x}" y1="${e.p1.y}" x2="${e.p2.x}" y2="${e.p2.y}" stroke="${e.color}" stroke-width="${e.width}"${tr}/>`);
-    if (e.arrow === "fim" || e.arrow === "ambas") out.push(`<polygon points="${ponta(e.p1, e.p2)}" fill="${e.color}"/>`);
-    if (e.arrow === "ambas") out.push(`<polygon points="${ponta(e.p2, e.p1)}" fill="${e.color}"/>`);
+    out.push(`<path d="${e.d}" fill="none" stroke="${e.color}" stroke-width="${e.width}"${tr}/>`);
+    if (e.arrow === "fim" || e.arrow === "ambas") out.push(`<polygon points="${ponta(e.antesFim, e.p2)}" fill="${e.color}"/>`);
+    if (e.arrow === "ambas") out.push(`<polygon points="${ponta(e.antesIni, e.p1)}" fill="${e.color}"/>`);
     if (e.text) {
       const tw = e.text.length * 6.4 + 8;
       out.push(`<rect x="${e.mid.x - tw / 2}" y="${e.mid.y - 9}" width="${tw}" height="16" rx="3" fill="#ffffff" opacity="0.9"/>`);
@@ -191,6 +231,8 @@ function DiagramaGeral({ active = true }) {
   const [mode, setMode] = useState("select");  // "select" | "connect"
   const [connectFrom, setConnectFrom] = useState(null);
   const [grade, setGrade] = useState(0);       // 0 = sem grade; senão o passo
+  const [laco, setLaco] = useState(null);      // retângulo de seleção sendo arrastado
+  const lacoRef = useRef(null);
   const stateRef = useRef(state); useEffect(() => { stateRef.current = state; });
   const svgRef = useRef(null); const dragRef = useRef(null); const fileRef = useRef(null);
 
@@ -265,19 +307,42 @@ function DiagramaGeral({ active = true }) {
     try { e.target.setPointerCapture && e.target.setPointerCapture(e.pointerId); } catch {}
   };
   const onPointerMove = (e) => {
+    const l = lacoRef.current;
+    if (l) {
+      const p = toSvg(e.clientX, e.clientY);
+      l.x1 = p.x; l.y1 = p.y;
+      setLaco({ ...l });
+      // seleciona ao vivo tudo o que o retângulo toca
+      const cx0 = Math.min(l.x0, l.x1), cx1 = Math.max(l.x0, l.x1);
+      const cy0 = Math.min(l.y0, l.y1), cy1 = Math.max(l.y0, l.y1);
+      const dentro = stateRef.current.nodes.filter((n) => {
+        const d = nodeDims(n);
+        return n.x + d.w / 2 >= cx0 && n.x - d.w / 2 <= cx1 && n.y + d.h / 2 >= cy0 && n.y - d.h / 2 <= cy1;
+      }).map((n) => n.id);
+      setSels(l.somar ? [...new Set([...l.antes, ...dentro])] : dentro);
+      return;
+    }
     const d = dragRef.current; if (!d) return;
     const p = toSvg(e.clientX, e.clientY);
     if (!d.moved) { pushHist(); d.moved = true; }
     const dx = p.x - d.ox, dy = p.y - d.oy;
     setStateRaw((s) => ({ ...s, nodes: s.nodes.map((n) => (d.base[n.id] ? { ...n, x: encaixar(d.base[n.id].x + dx), y: encaixar(d.base[n.id].y + dy) } : n)) }));
   };
-  const onPointerUp = () => { dragRef.current = null; };
+  const onPointerUp = () => { dragRef.current = null; lacoRef.current = null; setLaco(null); };
   useEffect(() => {
     window.addEventListener("pointermove", onPointerMove); window.addEventListener("pointerup", onPointerUp);
     return () => { window.removeEventListener("pointermove", onPointerMove); window.removeEventListener("pointerup", onPointerUp); };
   });
 
-  const onBgPointerDown = () => { setSels([]); setSelEdge(null); if (mode === "connect") setConnectFrom(null); };
+  const onBgPointerDown = (e) => {
+    setSelEdge(null);
+    if (mode === "connect") { setConnectFrom(null); setSels([]); return; }
+    const p = toSvg(e.clientX, e.clientY);
+    const somar = e.shiftKey || e.ctrlKey || e.metaKey;
+    lacoRef.current = { x0: p.x, y0: p.y, x1: p.x, y1: p.y, somar, antes: somar ? sels : [] };
+    setLaco({ ...lacoRef.current });
+    if (!somar) setSels([]);
+  };
   const onBgDoubleClick = (e) => { if (mode === "connect") return; const p = toSvg(e.clientX, e.clientY); addNode(p.x, p.y); };
 
   // aplica um patch a TODOS os nós selecionados
@@ -285,6 +350,7 @@ function DiagramaGeral({ active = true }) {
   const setLig = (patch) => mut((s) => ({ ...s, edges: s.edges.map((e) => (e.id === selEdge ? { ...ligCompleta(e), ...patch } : e)) }));
   const aplicarAlinhar = (como) => mut((s) => ({ ...s, nodes: alinhar(s.nodes, sels, como) }));
   const aplicarDistribuir = (eixo) => mut((s) => ({ ...s, nodes: distribuir(s.nodes, sels, eixo) }));
+  const aplicarCamada = (onde) => mut((s) => ({ ...s, nodes: onde === "frente" ? paraFrente(s.nodes, sels) : paraTras(s.nodes, sels) }));
 
   const exportSVG = () => dl(new Blob([buildGeralSVG(state)], { type: "image/svg+xml" }), "mapa-conceitual.svg");
   const exportPNG = () => {
@@ -347,6 +413,10 @@ function DiagramaGeral({ active = true }) {
         <button style={{ ...icone, color: sels.length >= 3 ? "#34495e" : "#c3ccd4" }} disabled={sels.length < 3} title="distribuir na horizontal" onClick={() => aplicarDistribuir("h")}>⋯</button>
         <button style={{ ...icone, color: sels.length >= 3 ? "#34495e" : "#c3ccd4" }} disabled={sels.length < 3} title="distribuir na vertical" onClick={() => aplicarDistribuir("v")}>⋮</button>
         <span style={divisor} />
+        <span style={{ fontSize: 11.5, color: sels.length ? "#46555f" : "#c3ccd4" }}>camada</span>
+        <button style={{ ...icone, color: sels.length ? "#34495e" : "#c3ccd4" }} disabled={!sels.length} title="trazer para a frente" onClick={() => aplicarCamada("frente")}>⬆</button>
+        <button style={{ ...icone, color: sels.length ? "#34495e" : "#c3ccd4" }} disabled={!sels.length} title="enviar para trás" onClick={() => aplicarCamada("tras")}>⬇</button>
+        <span style={divisor} />
         <label style={{ fontSize: 12, color: "#5a6b7a", display: "flex", alignItems: "center", gap: 4 }} title="prende as posições a uma grade">
           grade
           <select style={{ ...inp, width: 72, padding: "3px 6px", fontSize: 12 }} value={grade} onChange={(e) => setGrade(+e.target.value)}>
@@ -388,11 +458,11 @@ function DiagramaGeral({ active = true }) {
               const cor = on ? "#1f7a8c" : e.color;
               return (
                 <g key={e.id} onPointerDown={(ev) => { ev.stopPropagation(); setSelEdge(e.id); setSels([]); }} style={{ cursor: "pointer" }}>
-                  <line x1={e.p1.x} y1={e.p1.y} x2={e.p2.x} y2={e.p2.y} stroke={cor} strokeWidth={on ? e.width + 1 : e.width}
+                  <path d={e.d} fill="none" stroke={cor} strokeWidth={on ? e.width + 1 : e.width}
                     strokeDasharray={e.dash ? `${Math.max(4, e.width * 3)} ${Math.max(3, e.width * 2)}` : undefined} />
-                  {(e.arrow === "fim" || e.arrow === "ambas") && <polygon points={ponta(e.p1, e.p2)} fill={cor} />}
-                  {e.arrow === "ambas" && <polygon points={ponta(e.p2, e.p1)} fill={cor} />}
-                  <line x1={e.p1.x} y1={e.p1.y} x2={e.p2.x} y2={e.p2.y} stroke="transparent" strokeWidth={12} />
+                  {(e.arrow === "fim" || e.arrow === "ambas") && <polygon points={ponta(e.antesFim, e.p2)} fill={cor} />}
+                  {e.arrow === "ambas" && <polygon points={ponta(e.antesIni, e.p1)} fill={cor} />}
+                  <path d={e.d} fill="none" stroke="transparent" strokeWidth={14} />
                   {e.text && (<>
                     <rect x={e.mid.x - (e.text.length * 6.4 + 8) / 2} y={e.mid.y - 9} width={e.text.length * 6.4 + 8} height={16} rx={3} fill="#ffffff" opacity={0.9} />
                     <text x={e.mid.x} y={e.mid.y + 3} fontSize={11} fill="#5a6b7a" textAnchor="middle" style={{ pointerEvents: "none" }}>{e.text}</text>
@@ -417,9 +487,14 @@ function DiagramaGeral({ active = true }) {
                 </g>
               );
             })}
+            {laco && (
+              <rect x={Math.min(laco.x0, laco.x1)} y={Math.min(laco.y0, laco.y1)}
+                width={Math.abs(laco.x1 - laco.x0)} height={Math.abs(laco.y1 - laco.y0)}
+                fill="#1f7a8c" fillOpacity={0.08} stroke="#1f7a8c" strokeWidth={1} strokeDasharray="4 3" style={{ pointerEvents: "none" }} />
+            )}
           </svg>
           <div style={{ fontSize: 11, color: "#9aa7b2", marginTop: 6 }}>
-            Duplo-clique no fundo cria um nó · arraste para mover · <b>Shift+clique</b> seleciona vários (e arrasta juntos) · Ctrl+A seleciona tudo · Delete remove
+            Duplo-clique no fundo cria um nó · arraste para mover · <b>Shift+clique</b> seleciona vários (e arrasta juntos) · <b>arraste no fundo</b> para laçar · Ctrl+A seleciona tudo · Delete remove
           </div>
         </div>
 
@@ -481,6 +556,13 @@ function DiagramaGeral({ active = true }) {
               <input style={inp} value={selEdgeObj.text || ""} onChange={(e) => setLig({ text: e.target.value })} placeholder="ex.: leva a, causa, inclui…" />
               <label style={lbl}>Cor</label>
               <Paleta valor={selEdgeObj.color} aoEscolher={(c) => setLig({ color: c })} />
+              <label style={lbl}>Traçado</label>
+              <div style={{ display: "flex", gap: 5 }}>
+                {[["reta", "╱", "reta"], ["curva", "⌒", "curva"], ["cotovelo", "⌐", "em cotovelo (ângulos retos)"]].map(([k, ic, t2]) => (
+                  <button key={k} onClick={() => setLig({ curva: k })} title={t2}
+                    style={{ ...icone, fontSize: 14, background: selEdgeObj.curva === k ? "#e8f2f4" : "#fff", borderColor: selEdgeObj.curva === k ? "#1f7a8c" : "#cfd6dd" }}>{ic}</button>
+                ))}
+              </div>
               <label style={lbl}>Pontas</label>
               <div style={{ display: "flex", gap: 5 }}>
                 {PONTAS.map(([k, ic]) => (
