@@ -80,6 +80,14 @@ Saída: `Enlace.html` (~1,6 MB). É só abrir no navegador.
   (0–10). Deriva o espaço social — volume = soma dos capitais (eixo vertical),
   composição = econômico − cultural (eixo horizontal) — e desenha trajetórias a
   partir da posição anterior. Ponte `SUITE` (`getCampo`/`setCampo`).
+- `DiagramaGeral.jsx` — janela **Mapa conceitual**. Cada nó guarda forma
+  (retângulo, arredondado, elipse, losango, hexágono), preenchimento, borda, cor
+  do texto, fonte (família, corpo, negrito, itálico) e largura/altura fixas
+  opcionais; cada ligação guarda cor, espessura, traço e pontas. `formaDoNo()`
+  devolve a geometria uma única vez e os mesmos números alimentam o desenho na
+  tela (JSX interativo) e a exportação (string SVG) — sem isso o que se vê e o
+  que se exporta divergem. Seleção múltipla por Shift+clique, com `alinhar()` e
+  `distribuir()` próprios (usam o tamanho real de cada forma) e grade opcional.
 - `AnaliseQuantitativa.jsx` — janela quantitativa: testes estatísticos sobre
   dados colados/abertos ali, independente das demais.
 - `App.jsx` — casca com as 3 abas + sub-abas da Qualitativa + salvar/abrir
@@ -116,12 +124,13 @@ node testes/03-corpus.mjs   # uma suíte sozinha, com o detalhe de cada passo
 As suítes em `testes/` carregam o **arquivo único já construído** num DOM
 (jsdom) e clicam na interface como um usuário: trocam de aba, carregam os
 exemplos, importam arquivos, editam células e conferem os números que aparecem
-na tela. São 113 verificações cobrindo a estrutura das janelas, a revisão com
+na tela. São 137 verificações cobrindo a estrutura das janelas, a revisão com
 PRISMA, o corpus de vários documentos, a ida e volta do REFI-QDA, os memos, a
 rede de códigos, a busca no corpus, o comportamento quando o navegador recusa
 gravar (`07-armazenamento.mjs` finge a cota estourando) e os 11 tipos de
 gráfico da janela quantitativa (`09-graficos.mjs`, caracterização feita para
-proteger a saída do recharts).
+proteger a saída do recharts), a migração das chaves do nome antigo e as
+opções do mapa conceitual.
 
 O que o jsdom **não** alcança está anotado dentro dos arquivos: ele não faz
 layout (então `getBoundingClientRect` devolve zeros e cliques por coordenada no
