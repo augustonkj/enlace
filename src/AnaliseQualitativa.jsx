@@ -1,6 +1,5 @@
 import React, { useState, useRef, useMemo, useEffect, useCallback } from "react";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
-import { SUITE, useModalTrap, AvisoArmazenamento } from "./lib.js";
+import { SUITE, useModalTrap, AvisoArmazenamento, BarrasH } from "./lib.js";
 
 /* ===== Módulo: Análise textual qualitativa (Codifica - Bardin / ATD) ===== */
 const AnaliseQualitativa = (() => {
@@ -1594,16 +1593,7 @@ function QuantitativoView({ project, codeFreq, catFreq, cooc, codeMap, C, exclud
       {codeFreq.length > 0 ? (
         <>
           <div ref={chartRef} style={{ height: Math.max(180, codeFreq.length * 26), marginBottom: 6 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={codeFreq} layout="vertical" margin={{ left: 10, right: 20 }}>
-                <XAxis type="number" allowDecimals={false} tick={{ fontFamily: "system-ui", fontSize: 11 }} />
-                <YAxis type="category" dataKey="name" width={130} tick={{ fontFamily: "system-ui", fontSize: 11 }} />
-                <Tooltip />
-                <Bar dataKey="n" radius={[0, 3, 3, 0]}>
-                  {codeFreq.map((c) => <Cell key={c.id} fill={c.color} />)}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+            <BarrasH dados={codeFreq} />
           </div>
           <div style={{ display: "flex", gap: 6, marginBottom: 24 }}>
             <button onClick={() => exportSvgElement(chartRef.current && chartRef.current.querySelector("svg"), "frequencia-codigos", "png")} style={{ ...btnStyle(C), fontSize: 11 }}>PNG</button>

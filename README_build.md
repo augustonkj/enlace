@@ -116,10 +116,12 @@ node testes/03-corpus.mjs   # uma suíte sozinha, com o detalhe de cada passo
 As suítes em `testes/` carregam o **arquivo único já construído** num DOM
 (jsdom) e clicam na interface como um usuário: trocam de aba, carregam os
 exemplos, importam arquivos, editam células e conferem os números que aparecem
-na tela. São 97 verificações cobrindo a estrutura das janelas, a revisão com
+na tela. São 113 verificações cobrindo a estrutura das janelas, a revisão com
 PRISMA, o corpus de vários documentos, a ida e volta do REFI-QDA, os memos, a
-rede de códigos, a busca no corpus e o comportamento quando o navegador recusa
-gravar (`07-armazenamento.mjs` finge a cota estourando).
+rede de códigos, a busca no corpus, o comportamento quando o navegador recusa
+gravar (`07-armazenamento.mjs` finge a cota estourando) e os 11 tipos de
+gráfico da janela quantitativa (`09-graficos.mjs`, caracterização feita para
+proteger a saída do recharts).
 
 O que o jsdom **não** alcança está anotado dentro dos arquivos: ele não faz
 layout (então `getBoundingClientRect` devolve zeros e cliques por coordenada no
