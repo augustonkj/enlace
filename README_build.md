@@ -55,6 +55,9 @@ Saída: `Enlace.html` (~1,3 MB). É só abrir no navegador.
 
   **REFI-QDA**: `exportarREFI()`/`importarREFI()` leem e escrevem o QDA-XML 1.0
   (`.qde`/`.qdc`) — o formato que NVivo, MAXQDA e ATLAS.ti abrem.
+
+  **Memos** (`project.memos`): diário da análise, cada um podendo se vincular a
+  um código ou a um documento. Saem no relatório em PDF e no `.qde` como `<Note>`.
 - `RevisaoLiteratura.jsx` — janela **Revisão**: tabela de referências (importa
   `.csv` com cabeçalho, `.bib` e `.ris`; o BibTeX decodifica acento em LaTeX),
   detecção de duplicatas por DOI ou título+ano, e a etapa de cada referência.

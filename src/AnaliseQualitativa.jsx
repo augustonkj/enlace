@@ -242,7 +242,8 @@ function exportarREFI(project) {
     const desc = attrs ? `\n        <Description>${xmlEsc(attrs)}</Description>` : "";
     return `      <TextSource guid="${guidDe("src:" + d.id)}" name="${xmlEsc(d.name)}" richTextPath="" plainTextPath="internal://${guidDe("src:" + d.id)}.txt" creatingUser="${guidDe("user")}" creationDateTime="${agora}">${desc}\n        <PlainTextContent>${xmlEsc(d.text || "")}</PlainTextContent>\n${sel}\n      </TextSource>`;
   }).join("\n");
-  const notas = (p.metatexts || []).map((m) => `      <Note guid="${guidDe("note:" + m.id)}" name="${xmlEsc(m.title || "Metatexto")}" creatingUser="${guidDe("user")}" creationDateTime="${agora}">\n        <PlainTextContent>${xmlEsc(m.body || "")}</PlainTextContent>\n      </Note>`).join("\n");
+  const paraNota = (m, rot) => `      <Note guid="${guidDe("note:" + m.id)}" name="${xmlEsc(m.title || rot)}" creatingUser="${guidDe("user")}" creationDateTime="${agora}">\n        <PlainTextContent>${xmlEsc(m.body || "")}</PlainTextContent>\n      </Note>`;
+  const notas = [...(p.metatexts || []).map((m) => paraNota(m, "Metatexto")), ...(p.memos || []).map((m) => paraNota(m, "Memo"))].join("\n");
   return `<?xml version="1.0" encoding="utf-8"?>
 <Project xmlns="urn:QDA-XML:project:1.0" name="${xmlEsc(p.name || "Projeto")}" origin="Enlace" creatingUserGUID="${guidDe("user")}" creationDateTime="${agora}">
   <Users>
@@ -612,6 +613,11 @@ function buildStandaloneHTML(project, opts = {}) {
     return `<div style="margin-bottom:16px"><h3 style="margin:0 0 4px">${escapeHTML(cat.name)} <span style="font-weight:400;color:#999;font-size:13px">(${cat.tipo} · ${exs.length} recortes)</span></h3>${cat.desc ? `<p style="margin:0 0 6px;color:#555">${escapeHTML(cat.desc)}</p>` : ""}<div>${chips}</div></div>`;
   }).join("");
   const metaBlocks = project.metatexts.map((m) => `<div style="margin-bottom:18px"><h3 style="margin:0 0 6px">${escapeHTML(m.title)}</h3><p style="white-space:pre-wrap;line-height:1.7;margin:0">${escapeHTML(m.body)}</p></div>`).join("");
+  const memoBlocks = (project.memos || []).filter((m) => (m.body || "").trim() || (m.title || "").trim()).map((m) => {
+    const alvo = m.alvo && m.alvo.tipo === "codigo" ? (codeMap[m.alvo.id] || {}).name
+      : m.alvo && m.alvo.tipo === "documento" ? nomeDoc(project, m.alvo.id) : "";
+    return `<div style="margin-bottom:14px"><h3 style="margin:0 0 3px;font-size:14px">${escapeHTML(m.title || "Memo")}${alvo ? ` <span style="font-weight:400;color:#999;font-size:12px">(${escapeHTML(alvo)})</span>` : ""}</h3><p style="white-space:pre-wrap;line-height:1.6;margin:0;font-size:13px">${escapeHTML(m.body || "")}</p></div>`;
+  }).join("");
   const stamp = new Date().toLocaleDateString("pt-BR");
   return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHTML(project.name)}</title>
 <style>@media print{.noprint{display:none!important}}@page{margin:18mm}</style></head>
@@ -625,7 +631,7 @@ ${opts.print ? `<div class="noprint" style="position:sticky;top:0;display:flex;g
 <h2 style="border-bottom:1px solid #e3e9ee;padding-bottom:4px;margin-top:28px">Códigos</h2>
 <ul style="font-family:system-ui;font-size:14px;list-style:none;padding:0">${codeRows || "<li>—</li>"}</ul>
 <h2 style="border-bottom:1px solid #e3e9ee;padding-bottom:4px;margin-top:28px">${escapeHTML(MET.tabs.categorias)}</h2>${catBlocks || "<p>—</p>"}
-<h2 style="border-bottom:1px solid #e3e9ee;padding-bottom:4px;margin-top:28px">${escapeHTML(MET.tabs.metatexto)}</h2>${metaBlocks || "<p>—</p>"}
+<h2 style="border-bottom:1px solid #e3e9ee;padding-bottom:4px;margin-top:28px">${escapeHTML(MET.tabs.metatexto)}</h2>${metaBlocks || "<p>—</p>"}${memoBlocks ? `<h2 style="border-bottom:1px solid #e3e9ee;padding-bottom:4px;margin-top:28px">Memos da análise</h2>${memoBlocks}` : ""}
 </div></body></html>`;
 }
 
@@ -715,8 +721,9 @@ const METHOD_ORDER = ["livre", "conteudo", "atd", "fenomenologia", "discurso", "
 
 // as abas Documentos e Consultas existem em todos os métodos (não mudam de nome)
 Object.values(METHODS).forEach((m) => {
-  m.tabs = { corpus: "Documentos", recuperacao: "Consultas", ...m.tabs };
+  m.tabs = { corpus: "Documentos", recuperacao: "Consultas", memos: "Memos", ...m.tabs };
   if (!m.show.includes("corpus")) m.show = ["corpus", ...m.show];
+  if (!m.show.includes("memos")) m.show = [...m.show, "memos"];
   if (!m.show.includes("recuperacao")) {
     const i = m.show.indexOf("categorias");
     m.show = i >= 0 ? [...m.show.slice(0, i + 1), "recuperacao", ...m.show.slice(i + 1)] : [...m.show, "recuperacao"];
@@ -920,6 +927,13 @@ function App() {
     });
     setPending(null); setSelExcerpt(null);
   }
+  function addMemo() {
+    const m = { id: uid(), title: "Novo memo", body: "", alvo: null, updated: Date.now() };
+    update((p) => ({ memos: [m, ...(p.memos || [])] }));
+    return m.id;
+  }
+  function updateMemo(id, patch) { update((p) => ({ memos: (p.memos || []).map((m) => (m.id === id ? { ...m, ...patch, updated: Date.now() } : m)) })); }
+  function removeMemo(id) { update((p) => ({ memos: (p.memos || []).filter((m) => m.id !== id) })); }
   function abrirDoc(id) { update({ docAtual: id }); setPending(null); setSelExcerpt(null); }
   function setAttr(docId, chave, valor) { update((p) => ({ docs: docsDe(p).map((d) => (d.id === docId ? { ...d, attrs: { ...(d.attrs || {}), [chave]: valor } } : d)) })); }
   function addAtributo(nome) {
@@ -1262,6 +1276,9 @@ function App() {
       <div style={{ flex: 1, overflow: "hidden", display: "flex" }}>
         {activeTab === "corpus" && (
           <CorpusView {...{ project, C, addDocs, renameDoc, removeDoc, abrirDoc, setAttr, addAtributo, removeAtributo, onFile, setTab }} />
+        )}
+        {activeTab === "memos" && (
+          <MemosView {...{ project, C, addMemo, updateMemo, removeMemo, codeMap, abrirDoc, setTab }} />
         )}
         {activeTab === "recuperacao" && (
           <ConsultasView {...{ project, codeMap, C, abrirDoc, setTab }} />
@@ -2085,6 +2102,81 @@ function ConsultasView({ project, codeMap, C, abrirDoc, setTab }) {
   );
 }
 
+
+/* ============ MEMOS (diário da análise) ============ */
+function MemosView({ project, C, addMemo, updateMemo, removeMemo, codeMap, abrirDoc, setTab }) {
+  const [sel, setSel] = React.useState(null);
+  const memos = project.memos || [];
+  const atual = sel ? memos.find((m) => m.id === sel) : null;
+  const inp = { fontFamily: "system-ui", fontSize: 13, padding: "6px 8px", border: `1px solid ${C.line}`, borderRadius: 4, width: "100%", boxSizing: "border-box" };
+  const alvoLabel = (m) => {
+    if (!m.alvo || !m.alvo.tipo) return "geral";
+    if (m.alvo.tipo === "codigo") return "código: " + ((codeMap[m.alvo.id] || {}).name || "?");
+    if (m.alvo.tipo === "documento") return "documento: " + nomeDoc(project, m.alvo.id);
+    return "geral";
+  };
+  return (
+    <div style={{ flex: 1, overflow: "auto", padding: 16, display: "flex", gap: 16, flexWrap: "wrap", alignItems: "flex-start" }}>
+      <div style={{ flex: "0 1 300px", minWidth: 240 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+          <div style={{ fontWeight: 700, fontSize: 14 }}>Memos</div>
+          <Btn onClick={() => { const m = addMemo(); setSel(m); }}>+ memo</Btn>
+        </div>
+        <div style={{ fontSize: 11.5, color: C.sub, marginBottom: 10, lineHeight: 1.6 }}>
+          O diário da análise: decisões, dúvidas, hipóteses e por que um código nasceu ou mudou de nome.
+          É o que reconstitui o percurso quando a banca perguntar como você chegou ali.
+        </div>
+        <div style={{ border: `1px solid ${C.line}`, borderRadius: 6, maxHeight: 420, overflowY: "auto" }}>
+          {memos.map((m) => (
+            <div key={m.id} onClick={() => setSel(m.id)}
+              style={{ padding: "8px 10px", borderBottom: `1px solid ${C.line}`, cursor: "pointer", background: sel === m.id ? C.accentSoft : "transparent" }}>
+              <div style={{ fontSize: 13, fontWeight: 600 }}>{m.title || "(sem título)"}</div>
+              <div style={{ fontSize: 11, color: C.sub }}>{alvoLabel(m)} · {new Date(m.updated || Date.now()).toLocaleDateString("pt-BR")}</div>
+              <div style={{ fontSize: 11.5, color: C.sub, marginTop: 2, maxHeight: 32, overflow: "hidden" }}>{(m.body || "").slice(0, 90)}</div>
+            </div>
+          ))}
+          {!memos.length && <div style={{ padding: 14, fontSize: 12.5, color: C.sub }}>Nenhum memo ainda.</div>}
+        </div>
+      </div>
+      <div style={{ flex: "1 1 380px", minWidth: 300 }}>
+        {atual ? (
+          <div style={{ border: `1px solid ${C.line}`, borderRadius: 6, padding: 14 }}>
+            <input style={{ ...inp, fontSize: 15, fontWeight: 700 }} value={atual.title} placeholder="título do memo"
+              onChange={(e) => updateMemo(atual.id, { title: e.target.value })} />
+            <div style={{ display: "flex", gap: 8, alignItems: "center", margin: "10px 0", flexWrap: "wrap" }}>
+              <span style={{ fontSize: 12, color: C.sub }}>Vincular a:</span>
+              <select style={{ ...inp, width: "auto" }} value={atual.alvo && atual.alvo.tipo ? atual.alvo.tipo + ":" + atual.alvo.id : ""}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (!v) return updateMemo(atual.id, { alvo: null });
+                  const [tipo, id] = v.split(":");
+                  updateMemo(atual.id, { alvo: { tipo, id } });
+                }}>
+                <option value="">— nada (memo geral) —</option>
+                <optgroup label="Códigos">
+                  {(project.codes || []).map((c) => <option key={c.id} value={"codigo:" + c.id}>{c.name}</option>)}
+                </optgroup>
+                <optgroup label="Documentos">
+                  {docsDe(project).map((d) => <option key={d.id} value={"documento:" + d.id}>{d.name}</option>)}
+                </optgroup>
+              </select>
+              {atual.alvo && atual.alvo.tipo === "documento" && (
+                <Btn onClick={() => { abrirDoc(atual.alvo.id); setTab("codificacao"); }}>abrir documento</Btn>
+              )}
+              <div style={{ flex: 1 }} />
+              <Btn onClick={() => { removeMemo(atual.id); setSel(null); }} danger>excluir</Btn>
+            </div>
+            <textarea style={{ ...inp, minHeight: 300, resize: "vertical", lineHeight: 1.6 }} value={atual.body}
+              placeholder="o que você decidiu, o que ficou em dúvida, o que mudou e por quê…"
+              onChange={(e) => updateMemo(atual.id, { body: e.target.value })} />
+          </div>
+        ) : (
+          <div style={{ fontSize: 12.5, color: C.sub, padding: 20 }}>Escolha um memo à esquerda, ou crie um novo.</div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 return App;
 })();
