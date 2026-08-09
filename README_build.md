@@ -25,7 +25,7 @@ ou diretamente:
 node build_enlace.mjs src/main.jsx Enlace.html
 ```
 
-Saída: `Enlace.html` (~1,3 MB). É só abrir no navegador.
+Saída: `Enlace.html` (~1,6 MB). É só abrir no navegador.
 
 ## Estrutura do código (`src/`)
 - `lib.js` — camada compartilhada: cores, `NODE_TYPES`, `MOMENTS`, geometria/SVG
@@ -36,9 +36,10 @@ Saída: `Enlace.html` (~1,3 MB). É só abrir no navegador.
 - `AnaliseQualitativa.jsx` — análise textual. Persiste em `window.storage`
   (localStorage). Os métodos ficam na tabela `METHODS` (8 presets: livre, Bardin,
   ATD, fenomenologia, discurso, grounded, narrativas, Bourdieu) — cada um só
-  troca terminologia, passos, abas visíveis e dicas; o motor é o mesmo. Duas
-  abas são comuns a todos e registradas por código logo após `METHOD_ORDER`:
-  **Documentos** (`corpus`) e **Consultas** (`recuperacao`).
+  troca terminologia, passos, abas visíveis e dicas; o motor é o mesmo. Quatro
+  abas são comuns a todos os métodos e registradas por código logo após
+  `METHOD_ORDER`: **Documentos** (`corpus`), **Consultas** (`recuperacao`),
+  **Rede** (`rede`) e **Memos** (`memos`).
 
   O projeto é um **corpus**: `docs[]` (`{id, name, text, attrs, paginas}`),
   `docAtual`, `atributos[]`, e os recortes carregam `docId`. Projetos do formato
