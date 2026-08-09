@@ -545,7 +545,7 @@ table.cent{border-collapse:collapse;width:100%;font-size:12px} table.cent th{tex
     window.addEventListener("resize", onR); window.addEventListener("scroll", onR, true);
     return () => { cancelAnimationFrame(raf); window.removeEventListener("resize", onR); window.removeEventListener("scroll", onR, true); };
   }, [tour, viewMode]);
-  useEffect(() => { /* introdução agora é feita pelo Tutorial do QualMap; este tour continua acessível pela Ajuda */ }, []);
+  useEffect(() => { /* introdução agora é feita pelo Tutorial do Enlace; este tour continua acessível pela Ajuda */ }, []);
   useEffect(() => { if (!showHelp) return; const h = (e) => { if (e.key === "Escape") setShowHelp(false); }; window.addEventListener("keydown", h); return () => window.removeEventListener("keydown", h); }, [showHelp]);
   useEffect(() => {
     try { const raw = window.localStorage.getItem(LS_KEY); if (raw) { const o = JSON.parse(raw); if (o && o.nodes && o.edges) { savedPayloadRef.current = o; setHasSaved(true); } } } catch { storageOkRef.current = false; }

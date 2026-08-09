@@ -265,12 +265,12 @@ const QHELP = [
   ] },
   { h: "Salvar e compartilhar", items: [
     ["Salvar / Abrir", "guarda o projeto em arquivo .json (texto, códigos, recortes, categorias, metatextos, palavras excluídas)."],
-    ["Salvar QualMap", "no topo do programa, salva e restaura num único arquivo o trabalho das duas ferramentas (diagrama + análise textual)."],
+    ["Salvar Enlace", "no topo do programa, salva e restaura num único arquivo o trabalho das duas ferramentas (diagrama + análise textual)."],
     ["Compartilhar", "gera um HTML do projeto para leitura."],
     ["Relatório", "documento com o texto codificado, os códigos, as categorias e os metatextos."],
     ["Exemplo", "carrega um projeto pronto (trabalho remoto) já codificado, para ver como tudo funciona."],
   ] },
-  { h: "Salvamento", items: ["O trabalho é salvo automaticamente no navegador. Para levar a outro computador, use Salvar (.json) ou Salvar QualMap (backup completo)."] },
+  { h: "Salvamento", items: ["O trabalho é salvo automaticamente no navegador. Para levar a outro computador, use Salvar (.json) ou Salvar Enlace (backup completo)."] },
 ];
 
 // ---- confiabilidade entre codificadores (kappa de Cohen) ----

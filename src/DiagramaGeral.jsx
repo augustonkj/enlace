@@ -4,7 +4,7 @@ import { wrapText, esc, REGION_COLORS, SUITE, Menu, MenuItem } from "./lib.js";
 /*
   Diagrama Geral — mapa conceitual / mental livre, independente das outras abas.
   Nós (conceitos) e ligações rotuladas, sem as regras da Teoria Ator-Rede.
-  Estado próprio; entra no "Salvar QualMap" pela ponte SUITE (getGeral/setGeral).
+  Estado próprio; entra no "Salvar Enlace" pela ponte SUITE (getGeral/setGeral).
 */
 
 const VBW = 1000, VBH = 620;
@@ -106,7 +106,7 @@ function DiagramaGeral({ active = true }) {
   const undo = useCallback(() => setPast((p) => { if (!p.length) return p; setFuture((f) => [JSON.stringify(stateRef.current), ...f].slice(0, 60)); setStateRaw(JSON.parse(p[p.length - 1])); return p.slice(0, -1); }), []);
   const redo = useCallback(() => setFuture((f) => { if (!f.length) return f; setPast((p) => [...p, JSON.stringify(stateRef.current)].slice(-60)); setStateRaw(JSON.parse(f[0])); return f.slice(1); }), []);
 
-  // persistência no "Salvar QualMap"
+  // persistência no "Salvar Enlace"
   useEffect(() => {
     SUITE.getGeral = () => stateRef.current;
     SUITE.setGeral = (data) => { if (data && Array.isArray(data.nodes)) { setStateRaw({ nodes: data.nodes, edges: data.edges || [] }); setSel(null); setSelEdge(null); } };
@@ -115,10 +115,10 @@ function DiagramaGeral({ active = true }) {
 
   // autosave local simples
   useEffect(() => {
-    const t = setTimeout(() => { try { window.localStorage.setItem("qualmap_geral_v2", JSON.stringify(state)); } catch {} }, 600);
+    const t = setTimeout(() => { try { window.localStorage.setItem("enlace_geral_v2", JSON.stringify(state)); } catch {} }, 600);
     return () => clearTimeout(t);
   }, [state]);
-  useEffect(() => { try { const s = window.localStorage.getItem("qualmap_geral_v2"); if (s) { const o = JSON.parse(s); if (o && Array.isArray(o.nodes)) setStateRaw({ nodes: o.nodes, edges: o.edges || [] }); } } catch {} }, []);
+  useEffect(() => { try { const s = window.localStorage.getItem("enlace_geral_v2") || window.localStorage.getItem("qualmap_geral_v2"); if (s) { const o = JSON.parse(s); if (o && Array.isArray(o.nodes)) setStateRaw({ nodes: o.nodes, edges: o.edges || [] }); } } catch {} }, []);
 
   useEffect(() => {
     if (!active) return;
