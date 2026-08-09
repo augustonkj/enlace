@@ -5,7 +5,9 @@
   "type": "module",
   "description": "Build do Enlace.html offline a partir de src/",
   "scripts": {
-    "build": "node build_enlace.mjs src/main.jsx Enlace.html"
+    "build": "node build_enlace.mjs src/main.jsx Enlace.html",
+    "test": "node testes/rodar.mjs",
+    "verificar": "npm run build && node testes/rodar.mjs"
   },
   "dependencies": {
     "@babel/core": "^7.24.0",
