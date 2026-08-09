@@ -1163,6 +1163,71 @@ function AvisoArmazenamento({ erro, onSalvar, rotuloSalvar = "Salvar arquivo ago
   );
 }
 
+
+/* ============================================================
+   Gráficos em SVG, feitos à mão.
+
+   O resto do app já desenha tudo assim (diagrama TAR, PRISMA, espaço social,
+   rede de códigos). Manter uma biblioteca de gráficos só para umas barras
+   custava ~388 KB — quase 40% do arquivo — num programa cujo ponto é ser um
+   arquivo único leve. Estes componentes devolvem um <svg> de verdade, então a
+   exportação em PNG/SVG que já existia continua funcionando igual.
+   ============================================================ */
+
+// escala "bonita": devolve o teto e o passo dos rótulos do eixo
+function escalaBonita(maximo, alvoDivisoes = 4) {
+  const m = Math.max(1, maximo || 0);
+  const bruto = m / alvoDivisoes;
+  const mag = Math.pow(10, Math.floor(Math.log10(bruto)));
+  const norm = bruto / mag;
+  const passo = (norm <= 1 ? 1 : norm <= 2 ? 2 : norm <= 5 ? 5 : 10) * mag;
+  return { passo, teto: Math.ceil(m / passo) * passo };
+}
+const numBR = (v, casas = 0) => (typeof v === "number" ? v.toFixed(casas).replace(".", ",") : String(v));
+
+/* Barras horizontais com rótulo à esquerda — o gráfico de frequência por
+   código/categoria. `dados`: [{ id, name, n, color }] */
+function BarrasH({ dados, largRotulo = 150, corPadrao = "#1f7a8c", alturaBarra = 20, gap = 8, aoClicar = null }) {
+  const linhas = dados || [];
+  const L = 620, dir = 34;
+  const alturaUtil = linhas.length * (alturaBarra + gap) + gap;
+  const H = alturaUtil + 26; // espaço do eixo
+  const { passo, teto } = escalaBonita(Math.max(...linhas.map((d) => d.n), 1));
+  const larguraArea = L - largRotulo - dir;
+  const px = (v) => largRotulo + (v / teto) * larguraArea;
+  const marcas = [];
+  for (let v = 0; v <= teto + 1e-9; v += passo) marcas.push(v);
+  return (
+    <svg viewBox={`0 0 ${L} ${H}`} width="100%" height="100%" preserveAspectRatio="xMinYMin meet"
+      style={{ display: "block", fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" }}>
+      <rect x="0" y="0" width={L} height={H} fill="#ffffff" />
+      {marcas.map((v) => (
+        <g key={v}>
+          <line x1={px(v)} y1={6} x2={px(v)} y2={alturaUtil} stroke="#eef1f4" strokeWidth="1" />
+          <text x={px(v)} y={H - 8} fontSize="10.5" fill="#9aa7b2" textAnchor="middle">{numBR(v)}</text>
+        </g>
+      ))}
+      <line x1={largRotulo} y1={alturaUtil} x2={L - dir} y2={alturaUtil} stroke="#cfd6dd" strokeWidth="1" />
+      {linhas.map((d, i) => {
+        const y = gap + i * (alturaBarra + gap);
+        const larg = Math.max(1, px(d.n) - largRotulo);
+        return (
+          <g key={d.id || d.name || i} onClick={aoClicar ? () => aoClicar(d) : undefined} style={aoClicar ? { cursor: "pointer" } : undefined}>
+            <title>{`${d.name}: ${d.n}`}</title>
+            <rect x="0" y={y} width={L} height={alturaBarra} fill="transparent" />
+            <text x={largRotulo - 8} y={y + alturaBarra * 0.72} fontSize="11.5" fill="#46555f" textAnchor="end">
+              {d.name.length > 24 ? d.name.slice(0, 23) + "…" : d.name}
+            </text>
+            <rect x={largRotulo} y={y} width={larg} height={alturaBarra} rx="3" fill={d.color || corPadrao} />
+            <text x={largRotulo + larg + 6} y={y + alturaBarra * 0.72} fontSize="11" fill="#5a6b7a">{d.n}</text>
+          </g>
+        );
+      })}
+      {!linhas.length && <text x={L / 2} y={H / 2} fontSize="12" fill="#9aa7b2" textAnchor="middle">sem dados</text>}
+    </svg>
+  );
+}
+
 function setSizeCtx(v) { SIZE_CTX = v; }
 
-export { salvarLocal, usoLocal, formatarBytes, AvisoArmazenamento, VW, VH, SNAP_T, setDims, setSizeCtx, SUITE, useModalTrap, C, NODE_TYPES, TYPE_ORDER, MOMENTS, MOMENT_ORDER, NAT_LBL, ESTAB_LBL, KIND_LBL, brandes, parseCSVfull, csvNorm, colIdx, HELP, TOUR, Hint, Menu, MenuItem, REGION_COLORS, wrapText, sizeOf, degreeMap, clipToRect, distToSeg, qPoint, esc, approxW, edgeGeometry, arrowHead, barrierBar, estabBadge, scriptGlyph, calcGlyph, sourceLetter, sourceMark, nodeBody, buildInner, legendMetaFor, snapNode, alignNodes, distributeNodes, depths, forceLayout, arrange, declutter, fillLayout, foldBox, unfoldBox, parseCSV, toGraphML, toGEXF, seedVazio, seedDidatico, seedRedeLivre, seedRedeUnica, seedComparativo, seedCadeia, baseState };
+export { BarrasH, escalaBonita, numBR, salvarLocal, usoLocal, formatarBytes, AvisoArmazenamento, VW, VH, SNAP_T, setDims, setSizeCtx, SUITE, useModalTrap, C, NODE_TYPES, TYPE_ORDER, MOMENTS, MOMENT_ORDER, NAT_LBL, ESTAB_LBL, KIND_LBL, brandes, parseCSVfull, csvNorm, colIdx, HELP, TOUR, Hint, Menu, MenuItem, REGION_COLORS, wrapText, sizeOf, degreeMap, clipToRect, distToSeg, qPoint, esc, approxW, edgeGeometry, arrowHead, barrierBar, estabBadge, scriptGlyph, calcGlyph, sourceLetter, sourceMark, nodeBody, buildInner, legendMetaFor, snapNode, alignNodes, distributeNodes, depths, forceLayout, arrange, declutter, fillLayout, foldBox, unfoldBox, parseCSV, toGraphML, toGEXF, seedVazio, seedDidatico, seedRedeLivre, seedRedeUnica, seedComparativo, seedCadeia, baseState };
