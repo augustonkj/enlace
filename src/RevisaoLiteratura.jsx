@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
-import { esc, SUITE, Menu, MenuItem, Hint, parseCSVfull, csvNorm, wrapText } from "./lib.js";
+import { esc, SUITE, Menu, MenuItem, Hint, parseCSVfull, csvNorm, wrapText, salvarLocal, AvisoArmazenamento } from "./lib.js";
 
 /*
   Revisão de literatura — tabela de referências + diagrama de fluxo da seleção.
@@ -313,6 +313,7 @@ function RevisaoLiteratura({ active = true }) {
   const [aba, setAba] = useState("refs"); // "refs" | "protocolo" | "diagrama"
   const [sel, setSel] = useState(null);       // referência selecionada
   const [selCaixa, setSelCaixa] = useState(null); // caixa do diagrama
+  const [erroLocal, setErroLocal] = useState(null);
   const [filtro, setFiltro] = useState("");
   const [fEtapa, setFEtapa] = useState("");
   const [msg, setMsg] = useState("");
@@ -329,7 +330,7 @@ function RevisaoLiteratura({ active = true }) {
     SUITE.setRevisao = (d) => { if (d && Array.isArray(d.refs)) setStateRaw({ ...emptyRevisao(), ...d, protocolo: { ...emptyRevisao().protocolo, ...(d.protocolo || {}) } }); };
     return () => { SUITE.getRevisao = null; SUITE.setRevisao = null; };
   }, []);
-  useEffect(() => { const t = setTimeout(() => { try { window.localStorage.setItem("enlace_revisao_v1", JSON.stringify(state)); } catch {} }, 600); return () => clearTimeout(t); }, [state]);
+  useEffect(() => { const t = setTimeout(() => { const r = salvarLocal("enlace_revisao_v1", JSON.stringify(state)); setErroLocal(r.ok ? null : r); }, 600); return () => clearTimeout(t); }, [state]);
   useEffect(() => { try { const s = window.localStorage.getItem("enlace_revisao_v1"); if (s) { const o = JSON.parse(s); if (o && Array.isArray(o.refs)) setStateRaw({ ...emptyRevisao(), ...o, protocolo: { ...emptyRevisao().protocolo, ...(o.protocolo || {}) } }); } } catch {} }, []);
 
   const ct = useMemo(() => contagens(state), [state]);
@@ -427,6 +428,7 @@ function RevisaoLiteratura({ active = true }) {
 
   return (
     <div style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif", background: "#eef1f4", minHeight: "100%", display: "flex", flexDirection: "column" }}>
+      <AvisoArmazenamento erro={erroLocal} onSalvar={exportJSON} />
       <div style={{ display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap", padding: "9px 12px", background: "#fff", borderBottom: "1px solid #dde3e9" }}>
         <strong style={{ fontSize: 15, marginRight: 4 }}>Revisão de literatura</strong>
         <div style={{ display: "flex", border: "1px solid #cfd6dd", borderRadius: 6, overflow: "hidden" }}>

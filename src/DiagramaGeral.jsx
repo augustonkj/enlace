@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
-import { wrapText, esc, REGION_COLORS, SUITE, Menu, MenuItem } from "./lib.js";
+import { wrapText, esc, REGION_COLORS, SUITE, Menu, MenuItem, salvarLocal, AvisoArmazenamento } from "./lib.js";
 
 /*
   Diagrama Geral — mapa conceitual / mental livre, independente das outras abas.
@@ -96,6 +96,7 @@ function DiagramaGeral({ active = true }) {
   const [past, setPast] = useState([]); const [future, setFuture] = useState([]);
   const [sel, setSel] = useState(null);       // id de nó
   const [selEdge, setSelEdge] = useState(null);
+  const [erroLocal, setErroLocal] = useState(null);
   const [mode, setMode] = useState("select"); // "select" | "connect"
   const [connectFrom, setConnectFrom] = useState(null);
   const stateRef = useRef(state); useEffect(() => { stateRef.current = state; });
@@ -115,7 +116,7 @@ function DiagramaGeral({ active = true }) {
 
   // autosave local simples
   useEffect(() => {
-    const t = setTimeout(() => { try { window.localStorage.setItem("enlace_geral_v2", JSON.stringify(state)); } catch {} }, 600);
+    const t = setTimeout(() => { const r = salvarLocal("enlace_geral_v2", JSON.stringify(state)); setErroLocal(r.ok ? null : r); }, 600);
     return () => clearTimeout(t);
   }, [state]);
   useEffect(() => { try { const s = window.localStorage.getItem("enlace_geral_v2") || window.localStorage.getItem("qualmap_geral_v2"); if (s) { const o = JSON.parse(s); if (o && Array.isArray(o.nodes)) setStateRaw({ nodes: o.nodes, edges: o.edges || [] }); } } catch {} }, []);
@@ -208,6 +209,7 @@ function DiagramaGeral({ active = true }) {
 
   return (
     <div style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif", background: "#eef1f4", minHeight: "100%", display: "flex", flexDirection: "column" }}>
+      <AvisoArmazenamento erro={erroLocal} onSalvar={exportJSON} />
       <div style={{ display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap", padding: "9px 12px", background: "#fff", borderBottom: "1px solid #dde3e9" }}>
         <strong style={{ fontSize: 15, marginRight: 4 }}>Diagrama Geral</strong>
         <span style={{ fontSize: 11.5, color: "#9aa7b2" }}>mapa conceitual livre</span>

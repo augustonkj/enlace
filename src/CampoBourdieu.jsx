@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
-import { esc, SUITE, Menu, MenuItem, Hint } from "./lib.js";
+import { esc, SUITE, Menu, MenuItem, Hint, salvarLocal, AvisoArmazenamento } from "./lib.js";
 
 /*
   Campo (Bourdieu) — objetivação de um campo e do espaço social dos agentes.
@@ -181,6 +181,7 @@ const CAMPO_CAMPOS = [
 
 function CampoBourdieu({ active = true }) {
   const [state, setStateRaw] = useState(() => emptyCampo());
+  const [erroLocal, setErroLocal] = useState(null);
   const [sel, setSel] = useState(null);
   const [verTraj, setVerTraj] = useState(false);
   const [past, setPast] = useState([]);
@@ -198,7 +199,7 @@ function CampoBourdieu({ active = true }) {
   }, []);
 
   // autosave local
-  useEffect(() => { const t = setTimeout(() => { try { window.localStorage.setItem("enlace_campo_v1", JSON.stringify(state)); } catch {} }, 600); return () => clearTimeout(t); }, [state]);
+  useEffect(() => { const t = setTimeout(() => { const r = salvarLocal("enlace_campo_v1", JSON.stringify(state)); setErroLocal(r.ok ? null : r); }, 600); return () => clearTimeout(t); }, [state]);
   useEffect(() => { try { const s = window.localStorage.getItem("enlace_campo_v1"); if (s) { const o = JSON.parse(s); if (o && Array.isArray(o.agentes)) setStateRaw({ campo: { ...emptyCampo().campo, ...(o.campo || {}) }, agentes: o.agentes }); } } catch {} }, []);
 
   const setCampoField = (k, v) => setStateRaw((s) => ({ ...s, campo: { ...s.campo, [k]: v } }));
@@ -282,6 +283,7 @@ function CampoBourdieu({ active = true }) {
 
   return (
     <div style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif", background: "#eef1f4", minHeight: "100%", display: "flex", flexDirection: "column" }}>
+      <AvisoArmazenamento erro={erroLocal} onSalvar={exportJSON} />
       <div style={{ display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap", padding: "9px 12px", background: "#fff", borderBottom: "1px solid #dde3e9" }}>
         <strong style={{ fontSize: 15, marginRight: 4 }}>Campo (Bourdieu)</strong>
         <span style={{ fontSize: 11.5, color: "#9aa7b2" }}>espaço social: volume e estrutura do capital</span>
