@@ -1,11 +1,11 @@
 {
-  "name": "qualmap-build",
+  "name": "enlace-build",
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Build do QualMap.html offline a partir de src/",
+  "description": "Build do Enlace.html offline a partir de src/",
   "scripts": {
-    "build": "node build_qualmap.mjs src/main.jsx QualMap.html"
+    "build": "node build_enlace.mjs src/main.jsx Enlace.html"
   },
   "dependencies": {
     "@babel/core": "^7.24.0",

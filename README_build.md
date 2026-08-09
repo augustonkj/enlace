@@ -1,13 +1,13 @@
-# Build do QualMap
+# Build do Enlace
 
-Gera o `QualMap.html` (arquivo único, offline, abre por duplo clique) a partir do
+Gera o `Enlace.html` (arquivo único, offline, abre por duplo clique) a partir do
 código-fonte modular em `src/`.
 
 ## Pré-requisitos
 - Node.js 18 ou superior.
 
 ## Passos (uma vez)
-Na pasta do projeto (onde estão `src/`, `build_qualmap.mjs` e `package.json`):
+Na pasta do projeto (onde estão `src/`, `build_enlace.mjs` e `package.json`):
 
 ```
 npm install
@@ -22,10 +22,10 @@ npm run build
 ```
 ou diretamente:
 ```
-node build_qualmap.mjs src/main.jsx QualMap.html
+node build_enlace.mjs src/main.jsx Enlace.html
 ```
 
-Saída: `QualMap.html` (~1,3 MB). É só abrir no navegador.
+Saída: `Enlace.html` (~1,3 MB). É só abrir no navegador.
 
 ## Estrutura do código (`src/`)
 - `lib.js` — camada compartilhada: cores, `NODE_TYPES`, `MOMENTS`, geometria/SVG
@@ -38,7 +38,7 @@ Saída: `QualMap.html` (~1,3 MB). É só abrir no navegador.
 - `AnaliseQuantitativa.jsx` — janela quantitativa: lê os dois lados pela ponte
   `SUITE` (`getTar`/`getQual`) ao ser aberta. Hoje mostra frequências do texto e
   métricas da rede; é o lugar previsto para os **testes estatísticos**.
-- `App.jsx` — casca com as 4 abas + salvar/abrir QualMap + tutorial.
+- `App.jsx` — casca com as 4 abas + salvar/abrir Enlace + tutorial.
 - `main.jsx` — ponto de entrada (`createRoot`).
 
 As 4 janelas:
@@ -49,7 +49,7 @@ Diagramas ───────┘ (estado do TAR)   Análise Quantitativa ┘ (
 ```
 
 ## Como funciona o build
-O `build_qualmap.mjs` faz o bundle de `src/main.jsx` com **esbuild** (resolve os
+O `build_enlace.mjs` faz o bundle de `src/main.jsx` com **esbuild** (resolve os
 imports do `src/` e empacota react/react-dom/recharts no próprio bundle, sem UMD
 avulso), embute o `mammoth` como UMD (`window.mammoth`), injeta o shim
 `window.storage` (localStorage) e o CSS de foco visível, e escreve um HTML único.

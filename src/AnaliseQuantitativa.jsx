@@ -34,7 +34,8 @@ function histogram(x, nbins = 8) {
   Inspirado nos tópicos do livro de Moreira. Matemática em stats.js.
 */
 
-const LSK = "qualmap_quant_v2";
+const LSK = "enlace_quant_v2";
+const LSK_ANTIGA = "qualmap_quant_v2"; // chave do nome antigo, só para leitura
 
 // catálogo de testes. impl=false => no roteiro (ainda não implementado).
 const TESTS = [
@@ -185,7 +186,7 @@ const INFO = {
     f: [M(mt("Welch:") + mi("t") + EQ + frac(X1 + MI_ + X2, sq(frac(sq2(sb(mi("s"), mn("1"))), n1) + PL + frac(sq2(sb(mi("s"), mn("2"))), n2)))),
         M(mt("Student:") + mi("t") + EQ + frac(X1 + MI_ + X2, mi("σ") + CD + sq(frac(mn("1"), n1) + PL + frac(mn("1"), n2)))),
         M(mi("σ") + EQ + sq(frac(n1 + CD + sq2(sb(mi("dp"), mn("1"))) + PL + n2 + CD + sq2(sb(mi("dp"), mn("2"))), n1 + PL + n2 + MI_ + mn("2"))))],
-    leg: "Student: gl = n₁ + n₂ − 2. O QualMap usa a versão de Welch.",
+    leg: "Student: gl = n₁ + n₂ − 2. O Enlace usa a versão de Welch.",
   },
   tp: {
     e: "Compara dois escores do mesmo sujeito (ou de pares), por exemplo antes e depois de um tratamento, analisando a média das diferenças. Reduz a influência das diferenças individuais entre os sujeitos.",
@@ -511,7 +512,7 @@ function AnaliseQuantitativa({ active = true }) {
   };
 
   // restaurar / autosave (grade)
-  useEffect(() => { try { const s = window.localStorage.getItem(LSK); if (s) { const o = JSON.parse(s); if (o && o.grid && Array.isArray(o.grid.headers)) setGrid(o.grid); } } catch {} }, []);
+  useEffect(() => { try { const s = window.localStorage.getItem(LSK) || window.localStorage.getItem(LSK_ANTIGA); if (s) { const o = JSON.parse(s); if (o && o.grid && Array.isArray(o.grid.headers)) setGrid(o.grid); } } catch {} }, []);
   useEffect(() => { const t = setTimeout(() => { try { window.localStorage.setItem(LSK, JSON.stringify({ grid })); } catch {} }, 600); return () => clearTimeout(t); }, [grid]);
 
   const data = useMemo(() => gridToData(grid), [grid]);

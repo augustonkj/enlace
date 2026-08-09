@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 /*
- * build_qualmap.mjs — gera o QualMap.html offline (tudo embutido) a partir de src/.
+ * build_enlace.mjs — gera o Enlace.html offline (tudo embutido) a partir de src/.
  *
  * Uso:
- *   node build_qualmap.mjs [entrada.jsx] [saida.html]
- *   (padrão: src/main.jsx  ->  QualMap.html)
+ *   node build_enlace.mjs [entrada.jsx] [saida.html]
+ *   (padrão: src/main.jsx  ->  Enlace.html)
  *
  * Pré-requisitos (uma vez):
  *   npm install   (instala react, react-dom, recharts, mammoth, esbuild)
@@ -23,7 +23,7 @@ import * as esbuild from "esbuild";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const IN = process.argv[2] || "src/main.jsx";
-const OUT = process.argv[3] || "QualMap.html";
+const OUT = process.argv[3] || "Enlace.html";
 
 // procura node_modules em ./ , ./offline/ ou no diretório do script
 function nm() {
@@ -61,7 +61,7 @@ const mammoth = esc(readFileSync(join(NM, "mammoth/mammoth.browser.min.js"), "ut
 
 // 3+4: HTML final
 const html = `<!doctype html>
-<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>QualMap</title>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Enlace</title>
 <style>
   html,body,#rootapp{height:100%;margin:0}
   body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
@@ -72,7 +72,7 @@ const html = `<!doctype html>
   button:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-visible,label:focus-visible,a:focus-visible,[tabindex]:focus-visible{outline:2px solid #1f7a8c;outline-offset:1px}
 </style>
 </head><body>
-<div id="rootapp"><div id="loadmsg">Carregando o QualMap...</div></div><pre id="errbox" role="alert"></pre>
+<div id="rootapp"><div id="loadmsg">Carregando o Enlace...</div></div><pre id="errbox" role="alert"></pre>
 <script>
 window.addEventListener("error",function(e){var b=document.getElementById("errbox");if(b){b.style.display="block";b.textContent="Erro:\\n"+(e.message||e.error||e)+"\\n"+((e.error&&e.error.stack)||"");}});
 window.storage=window.storage||{get:async(k)=>{const v=localStorage.getItem(k);return v==null?null:{key:k,value:v};},set:async(k,v)=>{localStorage.setItem(k,String(v));return{key:k,value:v};},delete:async(k)=>{localStorage.removeItem(k);return{key:k,deleted:true};},list:async(p="")=>{const keys=[];for(let i=0;i<localStorage.length;i++){const kk=localStorage.key(i);if(kk.indexOf(p)===0)keys.push(kk);}return{keys};}};

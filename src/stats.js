@@ -1,5 +1,5 @@
 /*
-  stats.js — biblioteca estatística do QualMap (Análise Quantitativa).
+  stats.js — biblioteca estatística do Enlace (Análise Quantitativa).
   Funções puras: distribuições, descritivas e testes (paramétricos e não-paramétricos).
   Inspirado nos tópicos do livro de Moreira. Sem dependências externas.
 */

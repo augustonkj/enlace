@@ -20,5 +20,5 @@ desktop.ini
 # Configuração local de ferramentas
 .claude/
 
-# OBS: o app publicado (index.html / QualMap.html) NÃO é ignorado de propósito —
+# OBS: o app publicado (index.html / Enlace.html) NÃO é ignorado de propósito —
 # é o arquivo que o GitHub Pages serve no link público.
