@@ -141,50 +141,16 @@ function migrarProjeto(p) {
   const { text, ...resto } = p;
   return { ...base, ...resto, docs: [doc], docAtual: "d1", excerpts: (p.excerpts || []).map((e) => ({ ...e, docId: "d1" })) };
 }
-/* ---- PDF: texto com as páginas mapeadas ----
-   O pdf.js roda aqui SEM Worker: o módulo do worker é embutido e pendurado em
-   globalThis.pdfjsWorker, que é o gancho de "fake worker" da própria biblioteca.
-   Sem isso não haveria como ler PDF num arquivo único aberto por duplo clique. */
-let _pdfjs = null;
-async function carregarPdfjs() {
-  if (!_pdfjs) {
-    _pdfjs = (async () => {
-      const [lib, worker] = await Promise.all([
-        import("pdfjs-dist/build/pdf.min.mjs"),
-        import("pdfjs-dist/build/pdf.worker.min.mjs"),
-      ]);
-      globalThis.pdfjsWorker = worker;
-      try { lib.GlobalWorkerOptions.workerSrc = ""; } catch {}
-      return lib;
-    })();
-  }
-  return _pdfjs;
-}
+/* ---- PDF ----
+   O pdf.js foi retirado de propósito: sozinho ele dobrava o tamanho do arquivo
+   (de ~1,6 MB para ~3,3 MB), e este app existe para ser um arquivo único leve.
+   O mapa de páginas (doc.paginas) continua no modelo: se um leitor de PDF leve
+   entrar depois, a página de cada recorte volta a funcionar sem outra mudança. */
 async function textoDePDF(buffer, nome) {
   try {
-    const lib = await carregarPdfjs();
-    const pdf = await lib.getDocument({ data: new Uint8Array(buffer), isEvalSupported: false, useSystemFonts: false }).promise;
-    const partes = [], paginas = [];
-    let pos = 0;
-    for (let i = 1; i <= pdf.numPages; i++) {
-      const pg = await pdf.getPage(i);
-      const cont = await pg.getTextContent();
-      let t = "";
-      cont.items.forEach((it) => {
-        t += it.str || "";
-        if (it.hasEOL) t += "\n";
-        else if (it.str && !/\s$/.test(it.str)) t += " ";
-      });
-      const bloco = t.replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim() + "\n\n";
-      paginas.push({ n: i, inicio: pos, fim: pos + bloco.length });
-      partes.push(bloco); pos += bloco.length;
-    }
-    return { text: partes.join(""), paginas };
-  } catch (e) {
-    try { console.error("PDF:", (e && (e.message || e.name)) || e); } catch {}
-    try { window.alert(`Não foi possível ler o PDF "${nome}". Se ele for digitalizado (imagem), não há texto para extrair.`); } catch {}
-    return { text: "", paginas: null };
-  }
+    window.alert("Este app não lê PDF (\"" + nome + "\") para se manter leve e abrir por duplo clique. Converta para .docx ou .txt e importe de novo.");
+  } catch {}
+  return { text: "", paginas: null };
 }
 // em que página do documento cai um deslocamento do texto
 function paginaDoOffset(doc, off) {
@@ -426,16 +392,18 @@ function exampleFor(method) {
 }
 const QHELP = [
   { h: "O que é", items: ["Módulo de análise qualitativa de texto. Apoia o ciclo da Análise de Conteúdo (Bardin: codificação > categorização > inferência) e da Análise Textual Discursiva (Moraes e Galiazzi: unitarização > categorização > metatexto)."] },
-  { h: "Fluxo geral", items: ["1) Na aba Documentos, importe os textos do corpus (.txt, .docx, .pdf) — vários de uma vez, se quiser. 2) Selecione um trecho e aplique um ou mais códigos; o livro de códigos vale para todos os documentos. 3) Agrupe os códigos em categorias. 4) Na aba Consultas, recupere os recortes de todo o corpus e compare grupos de documentos. 5) Veja o quantitativo (frequências, nuvem de palavras). 6) Escreva o metatexto/inferência. 7) Se houver dois codificadores, confira a concordância na aba Confiabilidade."] },
+  { h: "Fluxo geral", items: ["1) Na aba Documentos, importe os textos do corpus (.txt, .docx) — vários de uma vez, se quiser. 2) Selecione um trecho e aplique um ou mais códigos; o livro de códigos vale para todos os documentos. 3) Agrupe os códigos em categorias. 4) Na aba Consultas, recupere os recortes de todo o corpus e compare grupos de documentos. 5) Veja o quantitativo (frequências, nuvem de palavras). 6) Escreva o metatexto/inferência. 7) Se houver dois codificadores, confira a concordância na aba Confiabilidade."] },
   { h: "As abas", items: [
     ["Codificação", "o texto fica à esquerda; selecione um trecho e marque com códigos (cores). Cada trecho marcado é um recorte (unidade de análise). Aqui também se renomeia e se mescla códigos."],
     ["Categorias", "crie categorias e associe códigos a elas. Categoria emergente nasce dos dados; a priori vem da teoria."],
     ["Quantitativo", "frequência de cada código e categoria, co-ocorrências, palavras frequentes e nuvem de palavras (com exportação em PNG/SVG)."],
+    ["Rede", "os códigos como grafo: o tamanho do círculo é o número de recortes e a espessura da ligação é quantas vezes dois códigos foram aplicados ao mesmo recorte. Clicar num código ou numa ligação mostra as citações por trás — não é um desenho à parte, é a sua codificação vista de outro ângulo."],
+    ["Memos", "o diário da análise: por que um código nasceu, mudou de nome ou foi dividido. Cada memo pode se vincular a um código ou documento, e todos entram no relatório em PDF e no .qde."],
     ["Confiabilidade", "compara duas codificações do mesmo texto e calcula a concordância entre codificadores (kappa de Cohen)."],
     ["Metatexto", "onde se escreve a interpretação: inferência (Bardin) ou metatexto descritivo-interpretativo (Moraes e Galiazzi). Pode vincular a uma categoria."],
   ] },
   { h: "Importar texto e buscar", items: [
-    ["Importar documentos", "pela aba Documentos ou pelo botão no cabeçalho do texto: .txt, .docx (Word) e .pdf. Cada arquivo vira um documento do corpus e o nome do arquivo vira o nome dele — importar NÃO substitui nem apaga o que já foi codificado. Em PDF, a página de cada trecho é preservada e aparece nas Consultas."],
+    ["Importar documentos", "pela aba Documentos ou pelo botão no cabeçalho do texto: .txt e .docx (Word). Cada arquivo vira um documento do corpus e o nome do arquivo vira o nome dele — importar NÃO substitui nem apaga o que já foi codificado."],
     ["Buscar", "o campo de busca destaca as ocorrências no texto; use ‹ › (ou Enter / Shift+Enter) para navegar e ✕ para limpar."],
   ] },
   { h: "Códigos e recortes", items: [
@@ -721,8 +689,12 @@ const METHOD_ORDER = ["livre", "conteudo", "atd", "fenomenologia", "discurso", "
 
 // as abas Documentos e Consultas existem em todos os métodos (não mudam de nome)
 Object.values(METHODS).forEach((m) => {
-  m.tabs = { corpus: "Documentos", recuperacao: "Consultas", memos: "Memos", ...m.tabs };
+  m.tabs = { corpus: "Documentos", recuperacao: "Consultas", rede: "Rede", memos: "Memos", ...m.tabs };
   if (!m.show.includes("corpus")) m.show = ["corpus", ...m.show];
+  if (!m.show.includes("rede")) {
+    const j = m.show.indexOf("recuperacao");
+    m.show = j >= 0 ? [...m.show.slice(0, j + 1), "rede", ...m.show.slice(j + 1)] : [...m.show, "rede"];
+  }
   if (!m.show.includes("memos")) m.show = [...m.show, "memos"];
   if (!m.show.includes("recuperacao")) {
     const i = m.show.indexOf("categorias");
@@ -1277,6 +1249,9 @@ function App() {
         {activeTab === "corpus" && (
           <CorpusView {...{ project, C, addDocs, renameDoc, removeDoc, abrirDoc, setAttr, addAtributo, removeAtributo, onFile, setTab }} />
         )}
+        {activeTab === "rede" && (
+          <RedeView {...{ project, codeMap, C, abrirDoc, setTab }} />
+        )}
         {activeTab === "memos" && (
           <MemosView {...{ project, C, addMemo, updateMemo, removeMemo, codeMap, abrirDoc, setTab }} />
         )}
@@ -1360,7 +1335,7 @@ function CodificacaoView(props) {
           <div style={{ margin: "auto", textAlign: "center", fontFamily: "system-ui", color: C.sub }}>
             <p style={{ marginBottom: 16, fontSize: 14 }}>Comece pelo material a analisar.</p>
             <label style={{ ...btnStyle(C), display: "inline-block", marginRight: 8, background: C.accent, color: "#fff", border: "none", padding: "8px 16px" }}>
-              Abrir arquivos (.txt, .docx, .pdf)<input ref={fileRef} type="file" accept=".txt,.docx,.pdf,text/plain" multiple onChange={onFile} style={{ display: "none" }} />
+              Abrir arquivos (.txt, .docx)<input ref={fileRef} type="file" accept=".txt,.docx,text/plain" multiple onChange={onFile} style={{ display: "none" }} />
             </label>
             <button onClick={() => setPasteMode(true)} style={{ ...btnStyle(C), padding: "8px 16px" }}>Colar texto</button>
           </div>
@@ -1396,8 +1371,8 @@ function CodificacaoView(props) {
             <div style={{ padding: "6px 12px", fontFamily: "system-ui", fontSize: 11, color: C.sub, borderBottom: `1px solid ${C.line}`, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
               <span>{textoDe(project).length} caracteres</span>
               <span>{project.excerpts.length} recortes</span>
-              <label style={{ ...btnStyle(C), padding: "3px 9px", fontSize: 11, cursor: "pointer" }} title="acrescentar documentos ao corpus (.txt, .docx, .pdf)">
-                + Documentos<input type="file" accept=".txt,.docx,.pdf,text/plain" multiple onChange={onFile} style={{ display: "none" }} />
+              <label style={{ ...btnStyle(C), padding: "3px 9px", fontSize: 11, cursor: "pointer" }} title="acrescentar documentos ao corpus (.txt, .docx)">
+                + Documentos<input type="file" accept=".txt,.docx,text/plain" multiple onChange={onFile} style={{ display: "none" }} />
               </label>
               <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 4 }}>
                 <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="buscar no texto…"
@@ -1857,8 +1832,8 @@ function CorpusView({ project, C, addDocs, renameDoc, removeDoc, abrirDoc, setAt
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
         <div style={{ fontWeight: 700, fontSize: 14 }}>Documentos do projeto</div>
         <span style={{ fontSize: 11.5, color: C.sub }}>{docs.length} documento(s) · {(project.excerpts || []).length} recortes no total</span>
-        <label style={btnStyle(C)}>+ Documentos (.txt, .docx, .pdf)
-          <input type="file" accept=".txt,.docx,.pdf,text/plain" multiple onChange={onFile} style={{ display: "none" }} />
+        <label style={btnStyle(C)}>+ Documentos (.txt, .docx)
+          <input type="file" accept=".txt,.docx,text/plain" multiple onChange={onFile} style={{ display: "none" }} />
         </label>
         <Btn onClick={() => addDocs([{ name: "Documento " + (docs.length + 1), text: "" }])}>+ vazio</Btn>
       </div>
@@ -2173,6 +2148,228 @@ function MemosView({ project, C, addMemo, updateMemo, removeMemo, codeMap, abrir
         ) : (
           <div style={{ fontSize: 12.5, color: C.sub, padding: 20 }}>Escolha um memo à esquerda, ou crie um novo.</div>
         )}
+      </div>
+    </div>
+  );
+}
+
+/* ============ REDE DE CÓDIGOS, LIGADA ÀS CITAÇÕES ============
+   Os nós são os códigos (tamanho = nº de recortes) e as ligações são as
+   co-ocorrências: dois códigos se ligam quando aparecem NO MESMO recorte.
+   Nada aqui é desenhado à mão — a rede é a codificação vista de outro ângulo,
+   e clicar num nó ou numa ligação mostra os recortes que a sustentam. */
+const RW = 900, RH = 560;
+
+function layoutRede(nos, arestas, iteracoes = 320) {
+  const n = nos.length;
+  if (!n) return [];
+  // começa num círculo (determinístico: a mesma codificação dá sempre o mesmo desenho)
+  const pos = nos.map((_, i) => ({
+    x: RW / 2 + RW * 0.33 * Math.cos((2 * Math.PI * i) / n),
+    y: RH / 2 + RH * 0.33 * Math.sin((2 * Math.PI * i) / n),
+  }));
+  const k = Math.sqrt((RW * RH) / n) * 0.52;
+  let temp = RW * 0.07;
+  for (let it = 0; it < iteracoes; it++) {
+    const d = pos.map(() => ({ x: 0, y: 0 }));
+    for (let i = 0; i < n; i++) {
+      for (let j = i + 1; j < n; j++) {
+        let dx = pos[i].x - pos[j].x, dy = pos[i].y - pos[j].y;
+        let dist = Math.hypot(dx, dy) || 0.01;
+        const f = (k * k) / dist;                     // repulsão
+        dx /= dist; dy /= dist;
+        d[i].x += dx * f; d[i].y += dy * f; d[j].x -= dx * f; d[j].y -= dy * f;
+      }
+    }
+    arestas.forEach((a) => {
+      let dx = pos[a.i].x - pos[a.j].x, dy = pos[a.i].y - pos[a.j].y;
+      let dist = Math.hypot(dx, dy) || 0.01;
+      const f = ((dist * dist) / k) * Math.min(2.5, 0.6 + a.n * 0.35); // atração pelo peso
+      dx /= dist; dy /= dist;
+      d[a.i].x -= dx * f; d[a.i].y -= dy * f; d[a.j].x += dx * f; d[a.j].y += dy * f;
+    });
+    for (let i = 0; i < n; i++) {
+      const m = Math.hypot(d[i].x, d[i].y) || 0.01;
+      pos[i].x += (d[i].x / m) * Math.min(m, temp);
+      pos[i].y += (d[i].y / m) * Math.min(m, temp);
+      pos[i].x = Math.max(46, Math.min(RW - 46, pos[i].x));
+      pos[i].y = Math.max(38, Math.min(RH - 38, pos[i].y));
+    }
+    temp = Math.max(0.8, temp * 0.972);
+  }
+  return pos;
+}
+
+function redeDoProjeto(project, { docFiltro = "", minimo = 1 } = {}) {
+  const recortes = (project.excerpts || []).filter((e) => !docFiltro || e.docId === docFiltro);
+  const freq = {};
+  recortes.forEach((e) => [...new Set(e.codeIds || [])].forEach((id) => { freq[id] = (freq[id] || 0) + 1; }));
+  const nos = (project.codes || []).filter((c) => freq[c.id]).map((c) => ({ ...c, n: freq[c.id] }));
+  const idx = {}; nos.forEach((c, i) => (idx[c.id] = i));
+  const pares = {};
+  recortes.forEach((e) => {
+    const ids = [...new Set(e.codeIds || [])].filter((id) => idx[id] != null);
+    for (let a = 0; a < ids.length; a++)
+      for (let b = a + 1; b < ids.length; b++) {
+        const ch = [ids[a], ids[b]].sort().join("|");
+        pares[ch] = (pares[ch] || 0) + 1;
+      }
+  });
+  const arestas = Object.entries(pares).map(([ch, n]) => {
+    const [a, b] = ch.split("|");
+    return { a, b, n, i: idx[a], j: idx[b] };
+  }).filter((x) => x.n >= minimo).sort((x, y) => y.n - x.n);
+  return { nos, arestas, recortes };
+}
+
+function buildRedeInner(nos, arestas, pos, sel) {
+  const o = [];
+  const maxN = Math.max(1, ...nos.map((c) => c.n));
+  const maxE = Math.max(1, ...arestas.map((a) => a.n));
+  const raio = (c) => 9 + (c.n / maxN) * 17;
+  arestas.forEach((a) => {
+    const on = sel && sel.tipo === "aresta" && sel.a === a.a && sel.b === a.b;
+    const p1 = pos[a.i], p2 = pos[a.j];
+    if (!p1 || !p2) return;
+    o.push(`<line x1="${p1.x.toFixed(1)}" y1="${p1.y.toFixed(1)}" x2="${p2.x.toFixed(1)}" y2="${p2.y.toFixed(1)}" stroke="${on ? "#1f7a8c" : "#9aa7b2"}" stroke-width="${(1 + (a.n / maxE) * 5).toFixed(1)}" stroke-opacity="${on ? 1 : 0.55}"/>`);
+    if (a.n > 1 || on) {
+      const mx = (p1.x + p2.x) / 2, my = (p1.y + p2.y) / 2;
+      o.push(`<circle cx="${mx.toFixed(1)}" cy="${my.toFixed(1)}" r="8.5" fill="#ffffff" stroke="${on ? "#1f7a8c" : "#cfd6dd"}"/>`);
+      o.push(`<text x="${mx.toFixed(1)}" y="${(my + 3.5).toFixed(1)}" font-size="10" fill="#5a6b7a" text-anchor="middle">${a.n}</text>`);
+    }
+  });
+  nos.forEach((c, i) => {
+    const p = pos[i]; if (!p) return;
+    const on = sel && sel.tipo === "no" && sel.id === c.id;
+    const r = raio(c);
+    o.push(`<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${r.toFixed(1)}" fill="${c.color}" fill-opacity="0.85" stroke="${on ? "#13313a" : "#ffffff"}" stroke-width="${on ? 3 : 1.8}"/>`);
+    o.push(`<text x="${p.x.toFixed(1)}" y="${(p.y + r + 13).toFixed(1)}" font-size="11.5" fill="#2b3a48" text-anchor="middle" stroke="#ffffff" stroke-width="3" paint-order="stroke">${escapeHTML(c.name)}</text>`);
+    o.push(`<text x="${p.x.toFixed(1)}" y="${(p.y + 4).toFixed(1)}" font-size="10.5" fill="#ffffff" text-anchor="middle" font-weight="700">${c.n}</text>`);
+  });
+  return o.join("");
+}
+function buildRedeSVG(nos, arestas, pos, sel) {
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${RW} ${RH}" width="${RW}" height="${RH}" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"><rect width="${RW}" height="${RH}" fill="#ffffff"/>${buildRedeInner(nos, arestas, pos, sel)}</svg>`;
+}
+
+function RedeView({ project, codeMap, C, abrirDoc, setTab }) {
+  const [sel, setSel] = React.useState(null);       // {tipo:"no"|"aresta", ...}
+  const [minimo, setMinimo] = React.useState(1);
+  const [docFiltro, setDocFiltro] = React.useState("");
+  const svgRef = React.useRef(null);
+
+  const { nos, arestas, recortes } = React.useMemo(() => redeDoProjeto(project, { docFiltro, minimo }), [project, docFiltro, minimo]);
+  const pos = React.useMemo(() => layoutRede(nos, arestas), [nos, arestas]);
+  const inner = React.useMemo(() => buildRedeInner(nos, arestas, pos, sel), [nos, arestas, pos, sel]);
+  React.useEffect(() => { if (svgRef.current) svgRef.current.innerHTML = inner; }, [inner]);
+
+  // citações por trás do que está selecionado
+  const citacoes = React.useMemo(() => {
+    if (!sel) return [];
+    if (sel.tipo === "no") return recortes.filter((e) => (e.codeIds || []).includes(sel.id));
+    return recortes.filter((e) => (e.codeIds || []).includes(sel.a) && (e.codeIds || []).includes(sel.b));
+  }, [sel, recortes]);
+
+  const clique = (ev) => {
+    const svg = svgRef.current; if (!svg) return;
+    const r = svg.getBoundingClientRect();
+    if (!r.width) return;
+    const x = ((ev.clientX - r.left) / r.width) * RW, y = ((ev.clientY - r.top) / r.height) * RH;
+    let melhor = null, dmin = Infinity;
+    nos.forEach((c, i) => { const d = Math.hypot(pos[i].x - x, pos[i].y - y); if (d < dmin) { dmin = d; melhor = { tipo: "no", id: c.id }; } });
+    if (dmin <= 30) { setSel(sel && sel.tipo === "no" && sel.id === melhor.id ? null : melhor); return; }
+    let melhorA = null, dminA = Infinity;
+    arestas.forEach((a) => {
+      const mx = (pos[a.i].x + pos[a.j].x) / 2, my = (pos[a.i].y + pos[a.j].y) / 2;
+      const d = Math.hypot(mx - x, my - y);
+      if (d < dminA) { dminA = d; melhorA = { tipo: "aresta", a: a.a, b: a.b, n: a.n }; }
+    });
+    setSel(dminA <= 26 ? melhorA : null);
+  };
+
+  const baixar = (blob, nome) => { const u = URL.createObjectURL(blob); const el = document.createElement("a"); el.href = u; el.download = nome; el.click(); setTimeout(() => URL.revokeObjectURL(u), 1500); };
+  const exportarSVG = () => baixar(new Blob([buildRedeSVG(nos, arestas, pos, null)], { type: "image/svg+xml" }), "rede-codigos.svg");
+  const exportarPNG = () => {
+    const img = new Image();
+    img.onload = () => { const cv = document.createElement("canvas"); cv.width = RW * 2; cv.height = RH * 2; const cx = cv.getContext("2d"); cx.scale(2, 2); cx.drawImage(img, 0, 0); cv.toBlob((b) => b && baixar(b, "rede-codigos.png")); };
+    img.src = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(buildRedeSVG(nos, arestas, pos, null))));
+  };
+
+  const sels = { fontFamily: "system-ui", fontSize: 12.5, padding: "4px 7px", border: `1px solid ${C.line}`, borderRadius: 4, background: "#fff" };
+  const titulo = sel ? (sel.tipo === "no" ? (codeMap[sel.id] || {}).name : `${(codeMap[sel.a] || {}).name} + ${(codeMap[sel.b] || {}).name}`) : null;
+
+  return (
+    <div style={{ flex: 1, overflow: "auto", padding: 16 }}>
+      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginBottom: 8 }}>
+        <div style={{ fontWeight: 700, fontSize: 14 }}>Rede de códigos</div>
+        <span style={{ fontSize: 11.5, color: C.sub }}>{nos.length} códigos · {arestas.length} ligações · {recortes.length} recortes</span>
+        <select style={sels} value={docFiltro} onChange={(e) => { setDocFiltro(e.target.value); setSel(null); }}>
+          <option value="">todos os documentos</option>
+          {docsDe(project).map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+        </select>
+        <label style={{ fontSize: 12, color: C.sub, display: "flex", alignItems: "center", gap: 5 }}>
+          co-ocorrência mínima
+          <input type="number" min="1" max="20" value={minimo} onChange={(e) => setMinimo(Math.max(1, +e.target.value || 1))} style={{ ...sels, width: 54 }} />
+        </label>
+        <Btn onClick={exportarPNG}>PNG</Btn>
+        <Btn onClick={exportarSVG}>SVG</Btn>
+      </div>
+      <div style={{ fontSize: 11.5, color: C.sub, marginBottom: 10, lineHeight: 1.6 }}>
+        Dois códigos se ligam quando foram aplicados <b>ao mesmo recorte</b>; o número na ligação é quantas vezes isso
+        aconteceu, e o número dentro do círculo é quantos recortes o código tem. Clique num código ou numa ligação para
+        ver as citações que sustentam aquilo — a rede não é um desenho à parte, é a sua codificação vista de outro ângulo.
+      </div>
+
+      <div style={{ display: "flex", gap: 14, flexWrap: "wrap", alignItems: "flex-start" }}>
+        <div style={{ flex: "1 1 520px", minWidth: 320, border: `1px solid ${C.line}`, borderRadius: 6, padding: 6 }}>
+          {nos.length ? (
+            <svg ref={svgRef} viewBox={`0 0 ${RW} ${RH}`} onClick={clique} style={{ width: "100%", height: "auto", display: "block", cursor: "pointer" }} />
+          ) : (
+            <div style={{ padding: "50px 20px", textAlign: "center", color: C.sub, fontSize: 13 }}>
+              Nenhum código aplicado ainda — codifique alguns trechos para a rede aparecer.
+            </div>
+          )}
+        </div>
+        <div style={{ flex: "0 1 320px", minWidth: 260 }}>
+          {sel ? (
+            <div style={{ border: `1px solid ${C.line}`, borderRadius: 6, padding: 12 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: C.sub, textTransform: "uppercase", letterSpacing: 0.4 }}>
+                {sel.tipo === "no" ? "Código" : "Co-ocorrência"}
+              </div>
+              <div style={{ fontSize: 14, fontWeight: 700, margin: "3px 0 8px" }}>{titulo}</div>
+              <div style={{ fontSize: 12, color: C.sub, marginBottom: 8 }}>
+                {citacoes.length} citação(ões){sel.tipo === "aresta" ? " em que os dois códigos aparecem juntos" : ""}
+              </div>
+              <div style={{ maxHeight: 380, overflowY: "auto" }}>
+                {citacoes.map((e) => (
+                  <div key={e.id} style={{ borderTop: `1px solid ${C.line}`, padding: "7px 0" }}>
+                    <button onClick={() => { abrirDoc(e.docId); setTab("codificacao"); }} style={{ ...btnStyle(C), fontSize: 10.5, padding: "2px 7px", marginBottom: 3 }}>
+                      {nomeDoc(project, e.docId)}
+                    </button>
+                    <div style={{ fontSize: 12.5, lineHeight: 1.5 }}>“{e.text}”</div>
+                    {e.memo && <div style={{ fontSize: 11.5, color: C.sub, marginTop: 2 }}>memo: {e.memo}</div>}
+                  </div>
+                ))}
+              </div>
+              <Btn onClick={() => setSel(null)}>limpar seleção</Btn>
+            </div>
+          ) : (
+            <div style={{ fontSize: 12.5, color: C.sub, lineHeight: 1.6, padding: 10 }}>
+              Clique num código (círculo) para ver todos os seus recortes, ou numa ligação (o número entre dois códigos)
+              para ver só os recortes em que os dois aparecem juntos.
+              {arestas.length > 0 && (
+                <div style={{ marginTop: 12 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: C.sub, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 4 }}>Ligações mais fortes</div>
+                  {arestas.slice(0, 6).map((a) => (
+                    <div key={a.a + a.b} onClick={() => setSel({ tipo: "aresta", a: a.a, b: a.b, n: a.n })} style={{ cursor: "pointer", fontSize: 12, padding: "3px 0" }}>
+                      <b>{a.n}×</b> {(codeMap[a.a] || {}).name} <span style={{ color: C.sub }}>+</span> {(codeMap[a.b] || {}).name}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
