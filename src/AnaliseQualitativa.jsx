@@ -229,6 +229,21 @@ function exampleFor(method) {
     [["x1", "brinquei de dar aula quando criança", ["n1"]], ["x2", "uma professora de português me marcou", ["n2"]], ["x3", "Prestei vestibular para Letras meio sem certeza", ["n3"]], ["x4", "ao ver um aluno entender uma poesia pela primeira vez, soube que era aquilo", ["n4"]], ["x5", "ainda me emociono no primeiro dia de aula", ["n5"]]],
     [["g1", "Enredo de vocação", "emergente", "", ["n1", "n2", "n4"]], ["g2", "Dúvida e confirmação", "emergente", "", ["n3", "n5"]]],
     [["m1", "Interpretação", "g1", "A narrativa organiza-se como um enredo de vocação: sinais na infância, um modelo inspirador e uma escolha incerta que se confirma num momento de virada (o aluno que compreende a poesia), consolidando a identidade docente. (Exemplo — substitua pela sua interpretação.)"]]);
+  if (method === "bourdieu") return mkExample("bourdieu", "Exemplo (Bourdieu): escolha do curso superior",
+    "ENTREVISTA — A escolha do curso superior\n\nEstudante 1: Na minha casa todo mundo é formado, meu pai é engenheiro e minha mãe professora. Desde criança tinha livro em casa e a gente ia ao teatro, então quando cheguei no ensino médio já era natural que eu fosse fazer faculdade — a dúvida era qual, não se eu iria. Meu pai conhecia um professor da universidade que me explicou como era o curso.\n\nEstudante 2: Eu sou o primeiro da família a chegar na universidade. Meus pais trabalharam a vida toda e sempre disseram que estudo é o que ninguém tira da gente, mas ninguém sabia me explicar como funcionava. Escolhi o curso que dava para pagar e que tinha aula à noite, porque eu trabalho durante o dia. No começo eu me sentia deslocado, achava que falava errado perto dos outros e ficava calado nos seminários. Depois entendi que o que faltava não era capacidade, era saber as regras que os outros já traziam de casa.",
+    [["p1", "Capital cultural herdado", "livros, teatro, diploma dos pais"], ["p2", "Capital social", "rede de contatos que informa e abre portas"], ["p3", "Capital econômico", "restrição material na escolha"], ["p4", "Habitus familiar", "o que é 'natural' esperar"], ["p5", "Violência simbólica", "sentir-se em falta diante da norma legítima"], ["p6", "Estratégia de reprodução"], ["p7", "Trajetória ascendente"]],
+    [["x1", "Na minha casa todo mundo é formado", ["p1", "p4"]],
+     ["x2", "tinha livro em casa e a gente ia ao teatro", ["p1"]],
+     ["x3", "já era natural que eu fosse fazer faculdade — a dúvida era qual, não se eu iria", ["p4", "p6"]],
+     ["x4", "Meu pai conhecia um professor da universidade que me explicou como era o curso", ["p2"]],
+     ["x5", "Eu sou o primeiro da família a chegar na universidade", ["p7"]],
+     ["x6", "Escolhi o curso que dava para pagar e que tinha aula à noite", ["p3"]],
+     ["x7", "achava que falava errado perto dos outros e ficava calado nos seminários", ["p5"]],
+     ["x8", "o que faltava não era capacidade, era saber as regras que os outros já traziam de casa", ["p5", "p1"]]],
+    [["g1", "Capital herdado e naturalização do destino escolar", "apriori", "o diploma como continuidade, não como conquista", ["p1", "p2", "p4", "p6"]],
+     ["g2", "Restrição material e trajetória improvável", "apriori", "a escolha possível dentro do que a condição permite", ["p3", "p7"]],
+     ["g3", "Violência simbólica", "apriori", "a cultura dominante vivida como incompetência pessoal", ["p5"]]],
+    [["m1", "Interpretação", "g1", "As duas falas não descrevem duas escolhas, mas duas posições. Para o Estudante 1, a universidade aparece como prolongamento do habitus familiar: o capital cultural herdado (livros, teatro, diploma dos pais) e o capital social (o professor conhecido) tornam o destino escolar tão evidente que a única dúvida é qual curso — a estratégia de reprodução opera sem precisar ser enunciada. Para o Estudante 2, a mesma instituição exige um capital que ele não herdou; a restrição econômica define o curso possível (noturno, pagável) e a distância entre o habitus de origem e a norma escolar é vivida como falta pessoal ('falava errado'), forma exemplar de violência simbólica — até que ele a reconhece como regra do jogo, e não como incapacidade. (Exemplo — substitua pela sua interpretação.)"]]);
   const p = exampleProject(); // conteudo / livre usam a entrevista de trabalho remoto
   if (method === "livre") { p.method = "livre"; p.name = "Exemplo: entrevista (trabalho remoto)"; }
   return p;
@@ -482,8 +497,18 @@ const METHODS = {
     catHint: "Temas / enredos: agrupe as unidades narrativas por recorrências e por enredos.",
     metaHint: "Interprete as narrativas: enredos, sentidos atribuídos e recorrências entre as histórias.",
   },
+  bourdieu: {
+    name: "Análise praxiológica (Bourdieu)",
+    desc: "Lê as práticas como produto da relação entre o habitus (disposições incorporadas na trajetória), o capital (econômico, cultural, social e simbólico) e o campo (espaço de posições em disputa). Não se trata de interpretar o que o sujeito diz, mas de objetivar a posição de onde ele fala — e as disposições que essa posição produz. A sub-aba Campo permite mapear o espaço social dos agentes deste mesmo estudo.",
+    steps: ["Objetivar o campo: posições, capital específico em disputa e regras do jogo", "Marcar no texto os indícios de capital, habitus e posição", "Agrupar em categorias praxiológicas (a priori, vindas da teoria)", "Interpretar: relacionar posição, disposições e práticas — sem cair no determinismo"],
+    tabs: { codificacao: "Indícios (capital/habitus)", categorias: "Categorias praxiológicas", quantitativo: "Quantitativo", confiabilidade: "Confiabilidade", metatexto: "Interpretação" },
+    show: ["codificacao", "categorias", "quantitativo", "metatexto"],
+    ref: "Bourdieu, P. A distinção; O poder simbólico; Razões práticas; A reprodução (com Passeron).",
+    catHint: "Categorias a priori vindas da teoria: capital econômico, cultural, social e simbólico, habitus, trajetória, estratégias de reprodução, violência simbólica, illusio e doxa.",
+    metaHint: "Interprete relacionando a posição no campo, o volume e a estrutura do capital e as disposições do habitus. A pergunta é: de que posição social esta prática é possível — e o que ela reproduz ou subverte?",
+  },
 };
-const METHOD_ORDER = ["livre", "conteudo", "atd", "fenomenologia", "discurso", "grounded", "narrativas"];
+const METHOD_ORDER = ["livre", "conteudo", "atd", "fenomenologia", "discurso", "grounded", "narrativas", "bourdieu"];
 
 function App() {
   const [project, setProject] = useState(null);
