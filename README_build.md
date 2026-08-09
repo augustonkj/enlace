@@ -33,11 +33,28 @@ Saída: `Enlace.html` (~1,3 MB). É só abrir no navegador.
   entre as ferramentas). Exporta tudo num barrel no fim do arquivo.
 - `EditorTAR.jsx` — editor Ator-Rede. Uma única instância serve as duas vistas da
   sub-aba **Ator-Rede** via a prop `viewMode`: `analise` (Tabela) e `diagrama`.
-- `AnaliseQualitativa.jsx` — análise textual (codificação, categorias, metatexto,
-  confiabilidade). Persiste em `window.storage` (localStorage). Os métodos ficam
-  na tabela `METHODS` (8 presets: livre, Bardin, ATD, fenomenologia, discurso,
-  grounded, narrativas, Bourdieu) — cada um só troca terminologia, passos, abas
-  visíveis e dicas; o motor de codificação é o mesmo.
+- `AnaliseQualitativa.jsx` — análise textual. Persiste em `window.storage`
+  (localStorage). Os métodos ficam na tabela `METHODS` (8 presets: livre, Bardin,
+  ATD, fenomenologia, discurso, grounded, narrativas, Bourdieu) — cada um só
+  troca terminologia, passos, abas visíveis e dicas; o motor é o mesmo. Duas
+  abas são comuns a todos e registradas por código logo após `METHOD_ORDER`:
+  **Documentos** (`corpus`) e **Consultas** (`recuperacao`).
+
+  O projeto é um **corpus**: `docs[]` (`{id, name, text, attrs, paginas}`),
+  `docAtual`, `atributos[]`, e os recortes carregam `docId`. Projetos do formato
+  antigo (um `project.text`) são convertidos por `migrarProjeto()`, chamada em
+  todo ponto de carga — o texto vira um documento e os recortes apontam para ele.
+  Helpers: `docsDe`, `docAtualDe`, `textoDe`, `exDoDoc`, `textoTodo`.
+
+  **PDF**: `textoDePDF()` usa o pdf.js embutido e roda **sem Worker** — o módulo
+  do worker é importado e pendurado em `globalThis.pdfjsWorker`, que é o gancho
+  de "fake worker" da própria biblioteca. Sem isso não haveria como ler PDF num
+  arquivo único aberto por duplo clique. Guarda o mapa de páginas em `doc.paginas`,
+  e `paginaDoOffset()` diz em que página cai cada recorte. É o que faz o bundle
+  passar de ~1,6 MB para ~3,3 MB.
+
+  **REFI-QDA**: `exportarREFI()`/`importarREFI()` leem e escrevem o QDA-XML 1.0
+  (`.qde`/`.qdc`) — o formato que NVivo, MAXQDA e ATLAS.ti abrem.
 - `RevisaoLiteratura.jsx` — janela **Revisão**: tabela de referências (importa
   `.csv` com cabeçalho, `.bib` e `.ris`; o BibTeX decodifica acento em LaTeX),
   detecção de duplicatas por DOI ou título+ano, e a etapa de cada referência.

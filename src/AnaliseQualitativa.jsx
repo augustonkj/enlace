@@ -181,6 +181,7 @@ async function textoDePDF(buffer, nome) {
     }
     return { text: partes.join(""), paginas };
   } catch (e) {
+    try { console.error("PDF:", (e && (e.message || e.name)) || e); } catch {}
     try { window.alert(`Não foi possível ler o PDF "${nome}". Se ele for digitalizado (imagem), não há texto para extrair.`); } catch {}
     return { text: "", paginas: null };
   }
@@ -200,6 +201,102 @@ const exDoDoc = (p, docId) => (p.excerpts || []).filter((e) => e.docId === docId
 const exDoAtual = (p) => exDoDoc(p, docAtualDe(p).id);
 const textoTodo = (p) => docsDe(p).map((d) => d.text || "").join("\n\n");
 const nomeDoc = (p, docId) => (docsDe(p).find((d) => d.id === docId) || {}).name || "—";
+
+/* ---- REFI-QDA (.qdc / .qde) — intercâmbio com NVivo, MAXQDA e ATLAS.ti ----
+   Exporta o projeto no formato do REFI-QDA Project 1.0: <Project> com
+   <Users>, <CodeBook><Codes>, <Sources><TextSource> e, em cada fonte, os
+   <PlainTextSelection> com startPosition/endPosition e <Coding>.
+   Importa de volta o mesmo formato (e o .qdc, que traz só o livro de códigos).
+   Referência: refi-qda.org — QDA-XML 1.0. */
+const UUID_SEMENTE = "0123456789abcdef";
+function guidDe(txt) {
+  // GUID estável derivado do id interno: o mesmo projeto exportado duas vezes
+  // mantém os mesmos identificadores, o que evita duplicar na reimportação.
+  let h1 = 0x811c9dc5, h2 = 0x01000193;
+  const s = String(txt || "");
+  for (let i = 0; i < s.length; i++) { h1 = (h1 ^ s.charCodeAt(i)) * 16777619 >>> 0; h2 = (h2 + s.charCodeAt(i) * (i + 7)) >>> 0; }
+  const hex = (n, len) => { let o = ""; for (let i = 0; i < len; i++) { o = UUID_SEMENTE[n & 15] + o; n = Math.floor(n / 16) + 7; } return o; };
+  return `${hex(h1, 8)}-${hex(h2, 4)}-4${hex(h1 + 3, 3)}-a${hex(h2 + 5, 3)}-${hex(h1 * 3 + h2, 12)}`;
+}
+const xmlEsc = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+function corHex(c) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(String(c || "").trim());
+  return m ? "#" + m[1].toUpperCase() : "#7A8B99";
+}
+function exportarREFI(project) {
+  const p = migrarProjeto(project);
+  const agora = new Date().toISOString();
+  const codigos = (p.codes || []).map((c) => {
+    const cats = (p.categories || []).filter((k) => (k.codeIds || []).includes(c.id)).map((k) => k.name);
+    const desc = [c.desc, cats.length ? "Categorias: " + cats.join("; ") : ""].filter(Boolean).join(" — ");
+    return `      <Code guid="${guidDe("code:" + c.id)}" name="${xmlEsc(c.name)}" isCodable="true" color="${corHex(c.color)}">${desc ? `\n        <Description>${xmlEsc(desc)}</Description>` : ""}\n      </Code>`;
+  }).join("\n");
+  const fontes = docsDe(p).map((d) => {
+    const sel = exDoDoc(p, d.id).map((e) => {
+      const cods = (e.codeIds || []).map((id) => `          <Coding guid="${guidDe("coding:" + e.id + ":" + id)}" creatingUser="${guidDe("user")}" creationDateTime="${agora}">\n            <CodeRef targetGUID="${guidDe("code:" + id)}"/>\n          </Coding>`).join("\n");
+      const memo = (e.memo || "").trim() ? `\n          <Description>${xmlEsc(e.memo)}</Description>` : "";
+      return `        <PlainTextSelection guid="${guidDe("sel:" + e.id)}" name="${xmlEsc((e.text || "").slice(0, 60))}" startPosition="${e.start | 0}" endPosition="${e.end | 0}" creatingUser="${guidDe("user")}" creationDateTime="${agora}">${memo}\n${cods}\n        </PlainTextSelection>`;
+    }).join("\n");
+    const attrs = Object.entries(d.attrs || {}).filter(([, v]) => String(v).trim())
+      .map(([k, v]) => `${k}: ${v}`).join(" · ");
+    const desc = attrs ? `\n        <Description>${xmlEsc(attrs)}</Description>` : "";
+    return `      <TextSource guid="${guidDe("src:" + d.id)}" name="${xmlEsc(d.name)}" richTextPath="" plainTextPath="internal://${guidDe("src:" + d.id)}.txt" creatingUser="${guidDe("user")}" creationDateTime="${agora}">${desc}\n        <PlainTextContent>${xmlEsc(d.text || "")}</PlainTextContent>\n${sel}\n      </TextSource>`;
+  }).join("\n");
+  const notas = (p.metatexts || []).map((m) => `      <Note guid="${guidDe("note:" + m.id)}" name="${xmlEsc(m.title || "Metatexto")}" creatingUser="${guidDe("user")}" creationDateTime="${agora}">\n        <PlainTextContent>${xmlEsc(m.body || "")}</PlainTextContent>\n      </Note>`).join("\n");
+  return `<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="urn:QDA-XML:project:1.0" name="${xmlEsc(p.name || "Projeto")}" origin="Enlace" creatingUserGUID="${guidDe("user")}" creationDateTime="${agora}">
+  <Users>
+    <User guid="${guidDe("user")}" name="Pesquisador"/>
+  </Users>
+  <CodeBook>
+    <Codes>
+${codigos}
+    </Codes>
+  </CodeBook>
+  <Sources>
+${fontes}
+  </Sources>${notas ? `\n  <Notes>\n${notas}\n  </Notes>` : ""}
+</Project>`;
+}
+function importarREFI(xml, nomeArquivo) {
+  const doc = new DOMParser().parseFromString(xml, "text/xml");
+  if (doc.querySelector("parsererror")) return null;
+  const raiz = doc.documentElement;
+  if (!raiz || !/^(Project|CodeBook)$/.test(raiz.localName)) return null;
+  const pega = (el, nome) => [...el.getElementsByTagName("*")].filter((n) => n.localName === nome);
+  const p = emptyProject((raiz.getAttribute("name") || nomeArquivo || "Projeto importado").slice(0, 60));
+  // códigos (o .qdc traz só isto)
+  const porGuid = {};
+  pega(raiz, "Code").forEach((c, i) => {
+    const id = uid();
+    porGuid[c.getAttribute("guid")] = id;
+    const d = pega(c, "Description")[0];
+    p.codes.push({ id, name: c.getAttribute("name") || "código " + (i + 1), color: corHex(c.getAttribute("color")) || PALETTE[i % PALETTE.length], desc: d ? d.textContent.trim() : "" });
+  });
+  // fontes de texto e seus recortes
+  const docs = [];
+  pega(raiz, "TextSource").forEach((s, i) => {
+    const conteudo = pega(s, "PlainTextContent")[0];
+    const docId = uid();
+    docs.push({ id: docId, name: s.getAttribute("name") || "Documento " + (i + 1), text: conteudo ? conteudo.textContent : "", attrs: {}, paginas: null });
+    pega(s, "PlainTextSelection").forEach((sel) => {
+      const ini = parseInt(sel.getAttribute("startPosition") || "0", 10);
+      const fim = parseInt(sel.getAttribute("endPosition") || "0", 10);
+      const codeIds = pega(sel, "CodeRef").map((r) => porGuid[r.getAttribute("targetGUID")]).filter(Boolean);
+      if (!codeIds.length || !(fim > ini)) return;
+      const texto = (conteudo ? conteudo.textContent : "").slice(ini, fim);
+      const memo = pega(sel, "Description")[0];
+      p.excerpts.push({ id: uid(), docId, start: ini, end: fim, text: texto, codeIds, memo: memo ? memo.textContent.trim() : "" });
+    });
+  });
+  if (docs.length) { p.docs = docs; p.docAtual = docs[0].id; }
+  pega(raiz, "Note").forEach((n) => {
+    const c = pega(n, "PlainTextContent")[0];
+    p.metatexts.push({ id: uid(), title: n.getAttribute("name") || "Nota", categoryId: null, body: c ? c.textContent : "" });
+  });
+  return p;
+}
+
 function exampleProject() {
   const text = `ENTREVISTA — Experiência de trabalho remoto
 (participante: profissional, 34 anos; entrevista semiestruturada)
@@ -328,7 +425,7 @@ function exampleFor(method) {
 }
 const QHELP = [
   { h: "O que é", items: ["Módulo de análise qualitativa de texto. Apoia o ciclo da Análise de Conteúdo (Bardin: codificação > categorização > inferência) e da Análise Textual Discursiva (Moraes e Galiazzi: unitarização > categorização > metatexto)."] },
-  { h: "Fluxo geral", items: ["1) Importe (.txt/.docx), cole ou abra um texto. 2) Selecione um trecho e aplique um ou mais códigos. 3) Agrupe os códigos em categorias. 4) Veja o quantitativo (frequências, nuvem de palavras). 5) Escreva o metatexto/inferência. 6) Se houver dois codificadores, confira a concordância na aba Confiabilidade."] },
+  { h: "Fluxo geral", items: ["1) Na aba Documentos, importe os textos do corpus (.txt, .docx, .pdf) — vários de uma vez, se quiser. 2) Selecione um trecho e aplique um ou mais códigos; o livro de códigos vale para todos os documentos. 3) Agrupe os códigos em categorias. 4) Na aba Consultas, recupere os recortes de todo o corpus e compare grupos de documentos. 5) Veja o quantitativo (frequências, nuvem de palavras). 6) Escreva o metatexto/inferência. 7) Se houver dois codificadores, confira a concordância na aba Confiabilidade."] },
   { h: "As abas", items: [
     ["Codificação", "o texto fica à esquerda; selecione um trecho e marque com códigos (cores). Cada trecho marcado é um recorte (unidade de análise). Aqui também se renomeia e se mescla códigos."],
     ["Categorias", "crie categorias e associe códigos a elas. Categoria emergente nasce dos dados; a priori vem da teoria."],
@@ -337,7 +434,7 @@ const QHELP = [
     ["Metatexto", "onde se escreve a interpretação: inferência (Bardin) ou metatexto descritivo-interpretativo (Moraes e Galiazzi). Pode vincular a uma categoria."],
   ] },
   { h: "Importar texto e buscar", items: [
-    ["Importar texto", "abra um arquivo .txt ou .docx (Word) pela tela inicial ou pelo botão Importar texto no cabeçalho do texto. Importar um texto novo substitui o atual e remove os recortes."],
+    ["Importar documentos", "pela aba Documentos ou pelo botão no cabeçalho do texto: .txt, .docx (Word) e .pdf. Cada arquivo vira um documento do corpus e o nome do arquivo vira o nome dele — importar NÃO substitui nem apaga o que já foi codificado. Em PDF, a página de cada trecho é preservada e aparece nas Consultas."],
     ["Buscar", "o campo de busca destaca as ocorrências no texto; use ‹ › (ou Enter / Shift+Enter) para navegar e ✕ para limpar."],
   ] },
   { h: "Códigos e recortes", items: [
@@ -352,12 +449,13 @@ const QHELP = [
     ["Exportar gráficos", "o gráfico de frequência por código e a nuvem têm botões PNG/SVG (SVG é vetorial, ideal para artigo)."],
   ] },
   { h: "Confiabilidade entre codificadores", items: [
-    ["Como usar", "as duas codificações precisam ser do mesmo texto. A é o projeto atual; escolha B em outro projeto ou abrindo um .json. O botão 'carregar exemplo (A e B)' mostra uma demonstração pronta."],
+    ["Como usar", "as duas codificações precisam ser dos mesmos documentos (pareados pelo nome, com texto idêntico). A é o projeto atual; escolha B em outro projeto ou abrindo um .json. O botão 'carregar exemplo (A e B)' mostra uma demonstração pronta."],
     ["O que calcula", "kappa de Cohen, concordância observada (Po), esperada por acaso (Pe) e a concordância por código. Os códigos dos dois são pareados pelo nome."],
     ["Referência", "Cohen (1960); bandas de interpretação de Landis e Koch (1977)."],
   ] },
   { h: "Salvar e compartilhar", items: [
-    ["Salvar / Abrir", "guarda o projeto em arquivo .json (texto, códigos, recortes, categorias, metatextos, palavras excluídas)."],
+    ["Salvar / Abrir", "guarda o projeto em .json (documentos, atributos, códigos, recortes, categorias, metatextos)."],
+    ["REFI-QDA (.qde)", "o botão .qde exporta no formato de intercâmbio REFI-QDA, que NVivo, MAXQDA e ATLAS.ti abrem; o botão Abrir aceita .qde e .qdc de volta. Serve para não ficar preso a nenhum programa — inclusive a este."],
     ["Salvar Enlace", "no topo do programa, salva e restaura num único arquivo o trabalho das duas ferramentas (diagrama + análise textual)."],
     ["Compartilhar", "gera um HTML do projeto para leitura."],
     ["Relatório", "documento com o texto codificado, os códigos, as categorias e os metatextos."],
@@ -965,6 +1063,10 @@ function App() {
     const base = (project.name || "projeto").replace(/\s+/g, "_");
     downloadFile(base + ".html", buildStandaloneHTML(project), "text/html;charset=utf-8");
   }
+  function exportQDE() {
+    const base = (project.name || "projeto").replace(/\s+/g, "_");
+    downloadFile(base + ".qde", exportarREFI(project), "application/xml;charset=utf-8");
+  }
   function exportPDF() {
     const w = window.open("", "_blank");
     if (!w) { try { window.alert("Permita pop-ups para gerar o relatório em PDF."); } catch {} return; }
@@ -1003,13 +1105,20 @@ function App() {
     const f = e.target.files?.[0];
     if (!f) return;
     const r = new FileReader();
+    const ehREFI = /\.(qde|qdc|xml)$/i.test(f.name || "");
     r.onload = async () => {
-      const obj = parseJSON(String(r.result));
-      if (!obj || typeof obj.text !== "string" || !Array.isArray(obj.codes)) {
-        alert("Arquivo inválido. Use um arquivo .codifica.json salvo por esta ferramenta.");
-        return;
+      let p = null;
+      if (ehREFI) {
+        p = importarREFI(String(r.result), (f.name || "").replace(/\.[^.]+$/, ""));
+        if (!p) { alert("Não consegui ler este arquivo REFI-QDA (.qde/.qdc)."); return; }
+      } else {
+        const obj = parseJSON(String(r.result));
+        if (!obj || !(typeof obj.text === "string" || Array.isArray(obj.docs)) || !Array.isArray(obj.codes)) {
+          alert("Arquivo inválido. Use um .codifica.json desta ferramenta ou um .qde/.qdc (REFI-QDA).");
+          return;
+        }
+        p = migrarProjeto({ ...emptyProject(), ...obj, id: uid() });
       }
-      const p = migrarProjeto({ ...emptyProject(), ...obj, id: uid() });
       await saveKey(STORE.proj(p.id), p);
       const ni = [...index, { id: p.id, name: p.name }];
       setIndex(ni); await saveKey(STORE.index, ni); await saveKey(STORE.active, p.id);
@@ -1083,8 +1192,9 @@ function App() {
         </select>
         <input value={project.name} onChange={(e) => update({ name: e.target.value })}
           style={{ fontFamily: "system-ui", fontSize: 12, padding: "4px 8px", width: 130, border: `1px solid ${C.line}`, borderRadius: 4 }} />
-        <label style={btnStyle(C)}>Abrir<input type="file" accept=".json,application/json" onChange={openFile} style={{ display: "none" }} /></label>
+        <label style={btnStyle(C)} title="abrir .codifica.json ou .qde/.qdc (REFI-QDA)">Abrir<input type="file" accept=".json,.qde,.qdc,.xml,application/json" onChange={openFile} style={{ display: "none" }} /></label>
         <Btn onClick={saveFile}>Salvar</Btn>
+        <Btn onClick={exportQDE} title="exportar no formato REFI-QDA, que NVivo, MAXQDA e ATLAS.ti abrem">.qde</Btn>
         <Btn onClick={exportPDF}>Relatório PDF</Btn>
         <Btn onClick={newProject}>+ projeto</Btn>
         <Btn onClick={clearProject}>Limpar</Btn>
@@ -1233,7 +1343,7 @@ function CodificacaoView(props) {
           <div style={{ margin: "auto", textAlign: "center", fontFamily: "system-ui", color: C.sub }}>
             <p style={{ marginBottom: 16, fontSize: 14 }}>Comece pelo material a analisar.</p>
             <label style={{ ...btnStyle(C), display: "inline-block", marginRight: 8, background: C.accent, color: "#fff", border: "none", padding: "8px 16px" }}>
-              Abrir arquivo (.txt, .docx)<input ref={fileRef} type="file" accept=".txt,.docx,text/plain" onChange={onFile} style={{ display: "none" }} />
+              Abrir arquivos (.txt, .docx, .pdf)<input ref={fileRef} type="file" accept=".txt,.docx,.pdf,text/plain" multiple onChange={onFile} style={{ display: "none" }} />
             </label>
             <button onClick={() => setPasteMode(true)} style={{ ...btnStyle(C), padding: "8px 16px" }}>Colar texto</button>
           </div>
@@ -1269,8 +1379,8 @@ function CodificacaoView(props) {
             <div style={{ padding: "6px 12px", fontFamily: "system-ui", fontSize: 11, color: C.sub, borderBottom: `1px solid ${C.line}`, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
               <span>{textoDe(project).length} caracteres</span>
               <span>{project.excerpts.length} recortes</span>
-              <label style={{ ...btnStyle(C), padding: "3px 9px", fontSize: 11, cursor: "pointer" }} title="substituir o texto por um arquivo .txt ou .docx">
-                Importar texto<input type="file" accept=".txt,.docx,text/plain" onChange={onFile} style={{ display: "none" }} />
+              <label style={{ ...btnStyle(C), padding: "3px 9px", fontSize: 11, cursor: "pointer" }} title="acrescentar documentos ao corpus (.txt, .docx, .pdf)">
+                + Documentos<input type="file" accept=".txt,.docx,.pdf,text/plain" multiple onChange={onFile} style={{ display: "none" }} />
               </label>
               <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 4 }}>
                 <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="buscar no texto…"
