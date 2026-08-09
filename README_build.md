@@ -46,18 +46,24 @@ Saída: `Enlace.html` (~1,3 MB). É só abrir no navegador.
   todo ponto de carga — o texto vira um documento e os recortes apontam para ele.
   Helpers: `docsDe`, `docAtualDe`, `textoDe`, `exDoDoc`, `textoTodo`.
 
-  **PDF**: `textoDePDF()` usa o pdf.js embutido e roda **sem Worker** — o módulo
-  do worker é importado e pendurado em `globalThis.pdfjsWorker`, que é o gancho
-  de "fake worker" da própria biblioteca. Sem isso não haveria como ler PDF num
-  arquivo único aberto por duplo clique. Guarda o mapa de páginas em `doc.paginas`,
-  e `paginaDoOffset()` diz em que página cai cada recorte. É o que faz o bundle
-  passar de ~1,6 MB para ~3,3 MB.
+  **PDF**: fora, de propósito. O pdf.js embutido chegou a funcionar (inclusive
+  sem Worker, pelo gancho `globalThis.pdfjsWorker`, para o arquivo continuar
+  abrindo por duplo clique), mas sozinho levava o bundle de ~1,6 MB para ~3,3 MB
+  — caro demais para um app cujo ponto é ser um arquivo único leve. O mapa de
+  páginas (`doc.paginas`, `paginaDoOffset()`) segue no modelo, então um leitor
+  leve pode entrar depois sem outra mudança.
 
   **REFI-QDA**: `exportarREFI()`/`importarREFI()` leem e escrevem o QDA-XML 1.0
   (`.qde`/`.qdc`) — o formato que NVivo, MAXQDA e ATLAS.ti abrem.
 
   **Memos** (`project.memos`): diário da análise, cada um podendo se vincular a
   um código ou a um documento. Saem no relatório em PDF e no `.qde` como `<Note>`.
+
+  **Rede** (`RedeView`): grafo calculado da própria codificação — os nós são os
+  códigos (tamanho = nº de recortes) e as ligações são co-ocorrências no mesmo
+  recorte. `redeDoProjeto()` monta, `layoutRede()` posiciona (Fruchterman-Reingold
+  determinístico, sem `Math.random`, para o mesmo projeto render sempre o mesmo
+  desenho) e clicar num nó ou numa ligação lista as citações que a sustentam.
 - `RevisaoLiteratura.jsx` — janela **Revisão**: tabela de referências (importa
   `.csv` com cabeçalho, `.bib` e `.ris`; o BibTeX decodifica acento em LaTeX),
   detecção de duplicatas por DOI ou título+ano, e a etapa de cada referência.
@@ -81,7 +87,7 @@ Saída: `Enlace.html` (~1,3 MB). É só abrir no navegador.
 As janelas:
 
 ```
-Análise Qualitativa ─┬─ Texto            (codificação, 8 métodos)
+Análise Qualitativa ─┬─ Texto            (codificação, 8 métodos, corpus + rede)
                      ├─ Revisão          (referências + fluxo PRISMA)
                      ├─ Ator-Rede ──┬─ Tabela     mesma rede
                      │              └─ Diagrama   (estado do EditorTAR)
