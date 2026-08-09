@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { SUITE, useModalTrap, Menu, MenuItem } from "./lib.js";
+import { SUITE, useModalTrap, Menu, MenuItem, migrarChaveAntiga } from "./lib.js";
 import { EditorTAR } from "./EditorTAR.jsx";
 import { AnaliseQualitativa } from "./AnaliseQualitativa.jsx";
 import { AnaliseQuantitativa } from "./AnaliseQuantitativa.jsx";
@@ -26,8 +26,10 @@ export default function App() {
   const tabs = [["qual", "Análise Qualitativa"], ["diag", "Mapa conceitual"], ["quant", "Análise Quantitativa"]];
   const showTar = tool === "qual" && qualSub === "tar";
   const finishTourQ = () => { setTourQ(-1); try { window.localStorage.setItem("enlace_tour_done", "1"); } catch {} };
-  // "qualmap_tour_done": chave do nome antigo — quem já viu o tutorial não vê de novo
-  useEffect(() => { try { if (!window.localStorage.getItem("enlace_tour_done") && !window.localStorage.getItem("qualmap_tour_done")) setTourQ(0); } catch {} }, []);
+  useEffect(() => {
+    migrarChaveAntiga("qualmap_tour_done", "enlace_tour_done"); // nome antigo do programa
+    try { if (!window.localStorage.getItem("enlace_tour_done")) setTourQ(0); } catch {}
+  }, []);
   useEffect(() => { if (tourQ < 0) return; const st = TOURQ[tourQ]; if (!st) return; if (st.tool && tool !== st.tool) setTool(st.tool); if (st.sub) setQualSub(st.sub); }, [tourQ]);
   const miniBtn = { border: "1px solid #cfd6dd", background: "#fff", color: "#46555f", borderRadius: 6, padding: "6px 12px", fontSize: 12.5, cursor: "pointer", fontWeight: 600 };
   const primaryBtn = { border: "none", background: "#1f7a8c", color: "#fff", borderRadius: 6, padding: "6px 14px", fontSize: 12.5, cursor: "pointer", fontWeight: 600 };
@@ -59,6 +61,7 @@ export default function App() {
     r.onload = async () => {
       try {
         const o = JSON.parse(String(r.result));
+        // __qualmap: arquivos salvos quando o programa tinha o nome antigo
         if (!o || !(o.__enlace || o.__qualmap)) { setMsg("este arquivo não é um projeto do Enlace"); setTimeout(() => setMsg(""), 3000); return; }
         if (o.tar && SUITE.setTar) SUITE.setTar(o.tar);
         if (o.qual && SUITE.setQual) await SUITE.setQual(o.qual);

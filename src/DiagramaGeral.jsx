@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
-import { wrapText, esc, REGION_COLORS, SUITE, Menu, MenuItem, salvarLocal, AvisoArmazenamento } from "./lib.js";
+import { wrapText, esc, REGION_COLORS, SUITE, Menu, MenuItem, salvarLocal, AvisoArmazenamento, migrarChaveAntiga } from "./lib.js";
 
 /*
   Diagrama Geral — mapa conceitual / mental livre, independente das outras abas.
@@ -119,7 +119,7 @@ function DiagramaGeral({ active = true }) {
     const t = setTimeout(() => { const r = salvarLocal("enlace_geral_v2", JSON.stringify(state)); setErroLocal(r.ok ? null : r); }, 600);
     return () => clearTimeout(t);
   }, [state]);
-  useEffect(() => { try { const s = window.localStorage.getItem("enlace_geral_v2") || window.localStorage.getItem("qualmap_geral_v2"); if (s) { const o = JSON.parse(s); if (o && Array.isArray(o.nodes)) setStateRaw({ nodes: o.nodes, edges: o.edges || [] }); } } catch {} }, []);
+  useEffect(() => { migrarChaveAntiga("qualmap_geral_v2", "enlace_geral_v2"); try { const s = window.localStorage.getItem("enlace_geral_v2"); if (s) { const o = JSON.parse(s); if (o && Array.isArray(o.nodes)) setStateRaw({ nodes: o.nodes, edges: o.edges || [] }); } } catch {} }, []);
 
   useEffect(() => {
     if (!active) return;
