@@ -38,6 +38,15 @@ Saída: `Enlace.html` (~1,3 MB). É só abrir no navegador.
   na tabela `METHODS` (8 presets: livre, Bardin, ATD, fenomenologia, discurso,
   grounded, narrativas, Bourdieu) — cada um só troca terminologia, passos, abas
   visíveis e dicas; o motor de codificação é o mesmo.
+- `RevisaoLiteratura.jsx` — janela **Revisão**: tabela de referências (importa
+  `.csv` com cabeçalho, `.bib` e `.ris`; o BibTeX decodifica acento em LaTeX),
+  detecção de duplicatas por DOI ou título+ano, e a etapa de cada referência.
+  As contagens do diagrama saem dessas etapas — `contagens()` — e o desenho é
+  montado por `layoutDiagrama()`/`buildRevisaoInner()`. No modo `sistematica`
+  aparecem o protocolo e o fluxo PRISMA completo; no `narrativa`, um fluxo de
+  três passos. Cada caixa aceita sobrescrita manual de rótulo e número
+  (`state.over`), com botão para recalcular. Ponte `SUITE`
+  (`getRevisao`/`setRevisao`).
 - `CampoBourdieu.jsx` — janela **Campo (Bourdieu)**: propriedades do campo
   (capital específico, illusio, doxa, polos) e agentes com os quatro capitais
   (0–10). Deriva o espaço social — volume = soma dos capitais (eixo vertical),
@@ -53,6 +62,7 @@ As janelas:
 
 ```
 Análise Qualitativa ─┬─ Texto            (codificação, 8 métodos)
+                     ├─ Revisão          (referências + fluxo PRISMA)
                      ├─ Ator-Rede ──┬─ Tabela     mesma rede
                      │              └─ Diagrama   (estado do EditorTAR)
                      └─ Campo (Bourdieu)  (espaço social dos agentes)
@@ -60,8 +70,8 @@ Mapa conceitual        (diagrama livre, independente)
 Análise Quantitativa   (testes estatísticos, independente)
 ```
 
-O "Salvar Enlace…" (menu Arquivo) reúne os quatro estados num único `.json` pela
-ponte `SUITE`: `tar`, `qual`, `geral` e `campo`.
+O "Salvar Enlace…" (menu Arquivo) reúne os cinco estados num único `.json` pela
+ponte `SUITE`: `tar`, `qual`, `geral`, `campo` e `revisao`.
 
 ## Como funciona o build
 O `build_enlace.mjs` faz o bundle de `src/main.jsx` com **esbuild** (resolve os
