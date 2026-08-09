@@ -10,6 +10,7 @@ function boxStats(a) {
   return { q1, med, q3, lo, hi, min: v[0], max: v[n - 1] };
 }
 import * as ST from "./stats.js";
+import { salvarLocal, AvisoArmazenamento } from "./lib.js";
 
 const CHART_COLORS = ["#1f7a8c", "#7a5ea8", "#2e7d4f", "#b06a1f", "#c0392b", "#16a085"];
 const PALETTES = {
@@ -353,6 +354,7 @@ function textToGrid(text) {
 
 function AnaliseQuantitativa({ active = true }) {
   const [grid, setGrid] = useState(() => emptyGrid());
+  const [erroLocal, setErroLocal] = useState(null);
   const [err, setErr] = useState("");
   const [testKey, setTestKey] = useState("describe");
   const [vars, setVars] = useState({});      // seleções: {num, num2, group, cat1, cat2, items:[]}
@@ -513,7 +515,7 @@ function AnaliseQuantitativa({ active = true }) {
 
   // restaurar / autosave (grade)
   useEffect(() => { try { const s = window.localStorage.getItem(LSK) || window.localStorage.getItem(LSK_ANTIGA); if (s) { const o = JSON.parse(s); if (o && o.grid && Array.isArray(o.grid.headers)) setGrid(o.grid); } } catch {} }, []);
-  useEffect(() => { const t = setTimeout(() => { try { window.localStorage.setItem(LSK, JSON.stringify({ grid })); } catch {} }, 600); return () => clearTimeout(t); }, [grid]);
+  useEffect(() => { const t = setTimeout(() => { const r = salvarLocal(LSK, JSON.stringify({ grid })); setErroLocal(r.ok ? null : r); }, 600); return () => clearTimeout(t); }, [grid]);
 
   const data = useMemo(() => gridToData(grid), [grid]);
   const test = ALL.find((t) => t.key === testKey);
@@ -875,6 +877,7 @@ function AnaliseQuantitativa({ active = true }) {
 
   return (
     <div style={T.page}>
+      <AvisoArmazenamento erro={erroLocal} onSalvar={exportPDF} rotuloSalvar="Gerar relatório agora" />
       <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
         <h2 style={T.h2}>Análise Quantitativa</h2>
         <div style={{ flex: 1 }} />

@@ -1093,6 +1093,76 @@ function baseState(nodes, edges, twoPanel, ta, tb, sa, sb) {
 
 /* ============================================================ */
 
+
+/* ============================================================
+   Armazenamento local: gravar sabendo se deu certo.
+
+   O navegador reserva cerca de 5 MB por origem para o localStorage. Quando
+   estoura, o setItem LANÇA — e, se ninguém olhar, o app segue dizendo que
+   salvou enquanto o trabalho se perde. Com corpus de várias entrevistas isso
+   deixou de ser hipótese. Daqui para frente toda gravação devolve {ok}, e quem
+   chama é obrigado a decidir o que mostrar.
+   ============================================================ */
+const LIMITE_LOCAL = 5 * 1024 * 1024; // cota típica por origem
+
+function salvarLocal(chave, texto) {
+  try {
+    window.localStorage.setItem(chave, String(texto));
+    return { ok: true };
+  } catch (e) {
+    const cheio = !!e && (e.name === "QuotaExceededError" || e.name === "NS_ERROR_DOM_QUOTA_REACHED" || e.code === 22 || e.code === 1014);
+    return { ok: false, cheio, erro: (e && (e.message || e.name)) || String(e) };
+  }
+}
+
+// quanto já foi ocupado (aproximado: 2 bytes por caractere, como o UTF-16 do navegador)
+function usoLocal() {
+  try {
+    const ls = window.localStorage;
+    let bytes = 0;
+    for (let i = 0; i < ls.length; i++) {
+      const k = ls.key(i);
+      bytes += (k.length + (ls.getItem(k) || "").length) * 2;
+    }
+    return { bytes, limite: LIMITE_LOCAL, fracao: bytes / LIMITE_LOCAL };
+  } catch (e) {
+    return null;
+  }
+}
+
+const formatarBytes = (b) => (b >= 1024 * 1024 ? (b / 1024 / 1024).toFixed(1).replace(".", ",") + " MB" : Math.round(b / 1024) + " KB");
+
+/* Faixa de aviso usada por todas as janelas. `erro` vem da gravação que falhou;
+   `onSalvar` é o caminho de saída (exportar o arquivo) — nunca mostramos o
+   problema sem oferecer a ação que salva o trabalho. */
+function AvisoArmazenamento({ erro, onSalvar, rotuloSalvar = "Salvar arquivo agora" }) {
+  const uso = usoLocal();
+  const perto = !erro && uso && uso.fracao >= 0.7;
+  if (!erro && !perto) return null;
+  const vermelho = !!erro;
+  return (
+    <div role="alert" style={{
+      display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap",
+      padding: "7px 12px", fontSize: 12.5, lineHeight: 1.5,
+      background: vermelho ? "#fbeae7" : "#fdf6e7", color: vermelho ? "#8c2f21" : "#7a5a12",
+      borderBottom: `1px solid ${vermelho ? "#f0c8c0" : "#efdfb6"}`,
+    }}>
+      <span style={{ fontWeight: 700 }}>{vermelho ? "⚠ o trabalho NÃO foi salvo no navegador" : "⚠ a memória do navegador está quase cheia"}</span>
+      <span>
+        {vermelho
+          ? (erro.cheio ? "A memória do navegador encheu." : "O navegador recusou a gravação.") + " Salve num arquivo agora para não perder nada."
+          : `${formatarBytes(uso.bytes)} de ~${formatarBytes(uso.limite)} usados. Quando encher, o salvamento automático para de funcionar.`}
+      </span>
+      {onSalvar && (
+        <button onClick={onSalvar} style={{
+          border: "none", borderRadius: 5, padding: "4px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer",
+          background: vermelho ? "#b3402f" : "#8a6d1f", color: "#fff",
+        }}>{rotuloSalvar}</button>
+      )}
+    </div>
+  );
+}
+
 function setSizeCtx(v) { SIZE_CTX = v; }
 
-export { VW, VH, SNAP_T, setDims, setSizeCtx, SUITE, useModalTrap, C, NODE_TYPES, TYPE_ORDER, MOMENTS, MOMENT_ORDER, NAT_LBL, ESTAB_LBL, KIND_LBL, brandes, parseCSVfull, csvNorm, colIdx, HELP, TOUR, Hint, Menu, MenuItem, REGION_COLORS, wrapText, sizeOf, degreeMap, clipToRect, distToSeg, qPoint, esc, approxW, edgeGeometry, arrowHead, barrierBar, estabBadge, scriptGlyph, calcGlyph, sourceLetter, sourceMark, nodeBody, buildInner, legendMetaFor, snapNode, alignNodes, distributeNodes, depths, forceLayout, arrange, declutter, fillLayout, foldBox, unfoldBox, parseCSV, toGraphML, toGEXF, seedVazio, seedDidatico, seedRedeLivre, seedRedeUnica, seedComparativo, seedCadeia, baseState };
+export { salvarLocal, usoLocal, formatarBytes, AvisoArmazenamento, VW, VH, SNAP_T, setDims, setSizeCtx, SUITE, useModalTrap, C, NODE_TYPES, TYPE_ORDER, MOMENTS, MOMENT_ORDER, NAT_LBL, ESTAB_LBL, KIND_LBL, brandes, parseCSVfull, csvNorm, colIdx, HELP, TOUR, Hint, Menu, MenuItem, REGION_COLORS, wrapText, sizeOf, degreeMap, clipToRect, distToSeg, qPoint, esc, approxW, edgeGeometry, arrowHead, barrierBar, estabBadge, scriptGlyph, calcGlyph, sourceLetter, sourceMark, nodeBody, buildInner, legendMetaFor, snapNode, alignNodes, distributeNodes, depths, forceLayout, arrange, declutter, fillLayout, foldBox, unfoldBox, parseCSV, toGraphML, toGEXF, seedVazio, seedDidatico, seedRedeLivre, seedRedeUnica, seedComparativo, seedCadeia, baseState };

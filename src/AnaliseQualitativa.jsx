@@ -1,6 +1,6 @@
 import React, { useState, useRef, useMemo, useEffect, useCallback } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
-import { SUITE, useModalTrap } from "./lib.js";
+import { SUITE, useModalTrap, AvisoArmazenamento } from "./lib.js";
 
 /* ===== Módulo: Análise textual qualitativa (Codifica - Bardin / ATD) ===== */
 const AnaliseQualitativa = (() => {
@@ -101,11 +101,17 @@ async function loadKey(key) {
     return null;
   }
 }
+// Devolve {ok}. Antes engolia a falha e quem chamava seguia anunciando "salvo"
+// — com corpus de várias entrevistas a cota do navegador estoura de verdade,
+// e um "✓ salvo" mentiroso custa o trabalho do dia.
 async function saveKey(key, val) {
   try {
     await window.storage.set(key, JSON.stringify(val));
+    return { ok: true };
   } catch (e) {
+    const cheio = !!e && (e.name === "QuotaExceededError" || e.name === "NS_ERROR_DOM_QUOTA_REACHED" || e.code === 22 || e.code === 1014);
     console.error("storage", e);
+    return { ok: false, cheio, erro: (e && (e.message || e.name)) || String(e) };
   }
 }
 
@@ -728,6 +734,7 @@ function App() {
   const saveTimer = useRef(null);
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState(null);
+  const [erroLocal, setErroLocal] = useState(null);
   const fileRef = useRef(null);
   const qHelpRef = useRef(null);
 
@@ -756,13 +763,15 @@ function App() {
     clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(async () => {
       const p = { ...project, updated: Date.now() };
-      await saveKey(STORE.proj(p.id), p);
+      const rProj = await saveKey(STORE.proj(p.id), p);
       const idx = (await loadKey(STORE.index)) || [];
       const ni = idx.map((x) => (x.id === p.id ? { id: p.id, name: p.name } : x));
       if (!ni.find((x) => x.id === p.id)) ni.push({ id: p.id, name: p.name });
       setIndex(ni);
-      await saveKey(STORE.index, ni);
-      setSaving(false); setSavedAt(Date.now());
+      const rIdx = await saveKey(STORE.index, ni);
+      setSaving(false);
+      if (rProj.ok && rIdx.ok) { setSavedAt(Date.now()); setErroLocal(null); }
+      else setErroLocal(rProj.ok ? rIdx : rProj);   // só marca "salvo" quando salvou mesmo
     }, 600);
   }, [project]);
 
@@ -1169,8 +1178,9 @@ function App() {
         <Btn onClick={loadExample}>Exemplo</Btn>
         <Btn onClick={() => setShowHelp(true)}>? Ajuda</Btn>
         <div style={{ flex: 1 }} />
-        <span style={{ fontSize: 11, color: saving ? C.sub : "#2e7d4f", fontFamily: "system-ui", minWidth: 78, textAlign: "right" }} title="o trabalho é salvo automaticamente no navegador">
-          {saving ? "salvando…" : savedAt ? "✓ salvo " + new Date(savedAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : ""}
+        <span style={{ fontSize: 11, color: erroLocal ? "#b3402f" : saving ? C.sub : "#2e7d4f", fontFamily: "system-ui", minWidth: 78, textAlign: "right", fontWeight: erroLocal ? 700 : 400 }}
+          title={erroLocal ? "o navegador recusou a gravação — salve num arquivo" : "o trabalho é salvo automaticamente no navegador"}>
+          {erroLocal ? "⚠ não salvo" : saving ? "salvando…" : savedAt ? "✓ salvo " + new Date(savedAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : ""}
         </span>
         <select value={project.id} onChange={(e) => switchProject(e.target.value)}
           style={{ fontFamily: "system-ui", fontSize: 12, padding: "4px 8px", border: `1px solid ${C.line}`, borderRadius: 4, background: "#fff" }}>
@@ -1186,6 +1196,7 @@ function App() {
         <Btn onClick={clearProject}>Limpar</Btn>
         <Btn onClick={deleteProject} danger>apagar</Btn>
       </div>
+      <AvisoArmazenamento erro={erroLocal} onSalvar={saveFile} />
       {showHelp && (
         <div onClick={() => setShowHelp(false)} role="dialog" aria-modal="true" style={{ position: "fixed", inset: 0, background: "rgba(20,30,38,.45)", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "40px 16px", zIndex: 1000 }}>
           <div ref={qHelpRef} onClick={(e) => e.stopPropagation()} style={{ background: "#fff", borderRadius: 10, maxWidth: 700, width: "100%", maxHeight: "85vh", overflowY: "auto", boxShadow: "0 12px 40px rgba(0,0,0,.25)", padding: "22px 26px", fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" }}>
