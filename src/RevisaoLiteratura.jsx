@@ -4,11 +4,9 @@ import { esc, SUITE, Menu, MenuItem, Hint, parseCSVfull, csvNorm, wrapText, salv
 /*
   Revisão de literatura — tabela de referências + diagrama de fluxo da seleção.
 
-  Dois modos:
-   · Narrativa   — tabela e um fluxo enxuto (identificados → triados → incluídos).
-   · Sistemática — acrescenta o protocolo (pergunta, bases, strings, critérios) e
-                   o fluxo completo no formato PRISMA 2020, com os textos buscados,
-                   os não recuperados e os excluídos na leitura com motivos.
+  Além da tabela há o protocolo (pergunta, bases, strings, critérios) e o fluxo
+  completo no formato PRISMA 2020, com os textos buscados, os não recuperados e
+  os excluídos na leitura com motivos.
 
   O diagrama é SEMPRE calculado a partir da etapa de cada referência na tabela;
   cada caixa pode ser sobrescrita à mão (rótulo e número) e devolvida ao valor
@@ -33,7 +31,6 @@ const nrm = (s) => csvNorm(s).replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").t
 
 function emptyRevisao() {
   return {
-    modo: "narrativa",
     protocolo: { pergunta: "", bases: "", strings: "", periodo: "", idiomas: "", inclusao: "", exclusao: "", registro: "", notas: "" },
     refs: [],
     over: {},   // sobrescritas do diagrama: { chave: { rotulo, n } }
@@ -42,9 +39,8 @@ function emptyRevisao() {
 
 function seedRevisao() {
   const r = (autores, ano, titulo, veiculo, base, etapa, motivo, tags) =>
-    ({ id: uid(), autores, ano: String(ano), titulo, veiculo, base, tipo: "artigo", doi: "", link: "", resumo: "", notas: "", tags: tags || "", etapa, motivo: motivo || "" });
+    ({ id: uid(), autores, ano: String(ano), titulo, veiculo, base, tipo: "artigo", doi: "", link: "", resumo: "", notas: [novaCaixa()], tags: tags || "", etapa, motivo: motivo || "" });
   return {
-    modo: "sistematica",
     protocolo: {
       pergunta: "Como a modelagem matemática tem sido usada no ensino de ciências na educação básica (2015–2025)?",
       bases: "Scopus, Web of Science, SciELO",
@@ -101,8 +97,6 @@ function contagens(state) {
     identificados, duplicados, triados, exTriagem, buscados, naoRec, avaliados, exLeitura, incluidos, pendentes,
     porBase: Object.entries(porBase).sort((a, b) => b[1] - a[1]),
     motivosLeitura: motivos("excluido_leitura"), motivosTriagem: motivos("excluido_triagem"),
-    // no modo narrativa tudo o que saiu depois da triagem vira "excluídos"
-    exNarrativa: exTriagem + naoRec + exLeitura,
   };
 }
 
@@ -209,7 +203,20 @@ function deRIS(txt, base) {
   return out.filter((r) => r.titulo || r.autores);
 }
 function novaRef(o = {}) {
-  return { id: uid(), autores: "", ano: "", titulo: "", veiculo: "", base: "", tipo: "artigo", doi: "", link: "", resumo: "", notas: "", tags: "", etapa: "identificado", motivo: "", ...o };
+  return { id: uid(), autores: "", ano: "", titulo: "", veiculo: "", base: "", tipo: "artigo", doi: "", link: "", resumo: "", notas: [novaCaixa()], tags: "", etapa: "identificado", motivo: "", ...o };
+}
+// Notas / extração de dados: cada referência guarda quantas caixas a pessoa quiser.
+function novaCaixa(texto = "") { return { id: uid(), titulo: "", texto }; }
+const notasTxt = (r) => r.notas.map((c) => [(c.titulo || "").trim(), (c.texto || "").trim()].filter(Boolean).join(": ")).filter(Boolean).join("\n");
+/* Chamada em todo ponto de carga: o que foi salvo antes tinha `notas` como um
+   texto só (vira a primeira caixa) e um `modo` narrativa/sistemática, que saiu. */
+function migrarRevisao(d) {
+  const { modo, ...resto } = d;
+  return {
+    ...emptyRevisao(), ...resto,
+    protocolo: { ...emptyRevisao().protocolo, ...(d.protocolo || {}) },
+    refs: d.refs.map((r) => (Array.isArray(r.notas) ? r : { ...r, notas: [novaCaixa(typeof r.notas === "string" ? r.notas : "")] })),
+  };
 }
 
 // ---------- diagrama: layout e desenho ----------
@@ -217,7 +224,6 @@ const NB = String.fromCharCode(1); // sentinela: mantém o "(n = X)" inteiro na 
 const DW = 1000, BOXW = 380, BOXX = 180, EXX = 600, FS = 13, LH = 17, PADY = 11, WRAP = 52;
 
 function layoutDiagrama(state, ct) {
-  const sist = state.modo === "sistematica";
   const over = state.over || {};
   const caixa = (chave, rotuloPadrao, nPadrao, extras, lado, etapa) => {
     const o = over[chave] || {};
@@ -231,16 +237,12 @@ function layoutDiagrama(state, ct) {
   const passos = [];
   const basesTxt = ct.porBase.map(([b, n]) => `${b}: ${n}`);
   passos.push({
-    esq: caixa("identificados", "Registros identificados nas bases", ct.identificados, sist ? basesTxt : [], "esq", "Identificação"),
-    dir: ct.duplicados || sist ? caixa("duplicados", "Registros removidos antes da triagem — duplicados", ct.duplicados, [], "dir") : null,
+    esq: caixa("identificados", "Registros identificados nas bases", ct.identificados, basesTxt, "esq", "Identificação"),
+    dir: caixa("duplicados", "Registros removidos antes da triagem — duplicados", ct.duplicados, [], "dir"),
   });
-  if (sist) {
-    passos.push({ esq: caixa("triados", "Registros triados (título e resumo)", ct.triados, [], "esq", "Triagem"), dir: caixa("ex_triagem", "Registros excluídos na triagem", ct.exTriagem, ct.motivosTriagem.map(([m, n]) => `${m}: ${n}`), "dir") });
-    passos.push({ esq: caixa("buscados", "Textos completos buscados", ct.buscados, [], "esq"), dir: caixa("nao_rec", "Textos completos não recuperados", ct.naoRec, [], "dir") });
-    passos.push({ esq: caixa("avaliados", "Textos completos avaliados para elegibilidade", ct.avaliados, [], "esq"), dir: caixa("ex_leitura", "Textos completos excluídos, com motivos", ct.exLeitura, ct.motivosLeitura.map(([m, n]) => `${m}: ${n}`), "dir") });
-  } else {
-    passos.push({ esq: caixa("triados", "Registros triados", ct.triados, [], "esq", "Triagem"), dir: caixa("ex_narrativa", "Registros excluídos", ct.exNarrativa, [], "dir") });
-  }
+  passos.push({ esq: caixa("triados", "Registros triados (título e resumo)", ct.triados, [], "esq", "Triagem"), dir: caixa("ex_triagem", "Registros excluídos na triagem", ct.exTriagem, ct.motivosTriagem.map(([m, n]) => `${m}: ${n}`), "dir") });
+  passos.push({ esq: caixa("buscados", "Textos completos buscados", ct.buscados, [], "esq"), dir: caixa("nao_rec", "Textos completos não recuperados", ct.naoRec, [], "dir") });
+  passos.push({ esq: caixa("avaliados", "Textos completos avaliados para elegibilidade", ct.avaliados, [], "esq"), dir: caixa("ex_leitura", "Textos completos excluídos, com motivos", ct.exLeitura, ct.motivosLeitura.map(([m, n]) => `${m}: ${n}`), "dir") });
   passos.push({ esq: caixa("incluidos", "Estudos incluídos na revisão", ct.incluidos, [], "esq", "Inclusão"), dir: null });
 
   let y = 54; const boxes = [];
@@ -252,14 +254,14 @@ function layoutDiagrama(state, ct) {
     if (p.dir) boxes.push({ ...p.dir, x: EXX, y, w: BOXW, h: hD });
     y += h + 42;
   });
-  return { boxes, altura: y - 42 + 30, sist };
+  return { boxes, altura: y - 42 + 30 };
 }
 
 function buildRevisaoInner(state, ct, { sel = null, withBg = true } = {}) {
   const { boxes, altura } = layoutDiagrama(state, ct);
   const o = [];
   if (withBg) o.push(`<rect x="0" y="0" width="${DW}" height="${altura}" fill="#ffffff"/>`);
-  o.push(`<text x="${DW / 2}" y="26" font-size="14" font-weight="700" fill="#2b3a48" text-anchor="middle">${esc(state.modo === "sistematica" ? "Fluxo da seleção dos estudos (PRISMA)" : "Fluxo da seleção dos estudos")}</text>`);
+  o.push(`<text x="${DW / 2}" y="26" font-size="14" font-weight="700" fill="#2b3a48" text-anchor="middle">Fluxo da seleção dos estudos (PRISMA)</text>`);
   const esq = boxes.filter((b) => b.lado === "esq");
   // faixas de etapa à esquerda
   esq.forEach((b) => { if (b.etapa) o.push(`<text x="30" y="${b.y + b.h / 2}" font-size="12" font-weight="700" fill="#1f7a8c" text-anchor="middle" transform="rotate(-90 30 ${b.y + b.h / 2})">${esc(b.etapa)}</text>`); });
@@ -327,20 +329,22 @@ function RevisaoLiteratura({ active = true }) {
 
   useEffect(() => {
     SUITE.getRevisao = () => stateRef.current;
-    SUITE.setRevisao = (d) => { if (d && Array.isArray(d.refs)) setStateRaw({ ...emptyRevisao(), ...d, protocolo: { ...emptyRevisao().protocolo, ...(d.protocolo || {}) } }); };
+    SUITE.setRevisao = (d) => { if (d && Array.isArray(d.refs)) setStateRaw(migrarRevisao(d)); };
     return () => { SUITE.getRevisao = null; SUITE.setRevisao = null; };
   }, []);
   useEffect(() => { const t = setTimeout(() => { const r = salvarLocal("enlace_revisao_v1", JSON.stringify(state)); setErroLocal(r.ok ? null : r); }, 600); return () => clearTimeout(t); }, [state]);
-  useEffect(() => { try { const s = window.localStorage.getItem("enlace_revisao_v1"); if (s) { const o = JSON.parse(s); if (o && Array.isArray(o.refs)) setStateRaw({ ...emptyRevisao(), ...o, protocolo: { ...emptyRevisao().protocolo, ...(o.protocolo || {}) } }); } } catch {} }, []);
+  useEffect(() => { try { const s = window.localStorage.getItem("enlace_revisao_v1"); if (s) { const o = JSON.parse(s); if (o && Array.isArray(o.refs)) setStateRaw(migrarRevisao(o)); } } catch {} }, []);
 
   const ct = useMemo(() => contagens(state), [state]);
-  const sist = state.modo === "sistematica";
 
   const setRef = (id, k, v) => setStateRaw((s) => ({ ...s, refs: s.refs.map((r) => (r.id === id ? { ...r, [k]: v } : r)) }));
   const addRef = () => { const r = novaRef(); mut((s) => ({ ...s, refs: [...s.refs, r] })); setSel(r.id); setAba("refs"); };
   const delRef = (id) => { mut((s) => ({ ...s, refs: s.refs.filter((r) => r.id !== id) })); if (sel === id) setSel(null); };
   const setProt = (k, v) => setStateRaw((s) => ({ ...s, protocolo: { ...s.protocolo, [k]: v } }));
-  const setModo = (m) => mut((s) => ({ ...s, modo: m }));
+  const comNotas = (id, f) => (s) => ({ ...s, refs: s.refs.map((r) => (r.id === id ? { ...r, notas: f(r.notas) } : r)) });
+  const addCaixa = (id) => mut(comNotas(id, (ns) => [...ns, novaCaixa()]));
+  const delCaixa = (id, cid) => mut(comNotas(id, (ns) => ns.filter((c) => c.id !== cid)));
+  const setCaixa = (id, cid, k, v) => setStateRaw(comNotas(id, (ns) => ns.map((c) => (c.id === cid ? { ...c, [k]: v } : c))));
 
   const marcarDuplicados = () => {
     const dupes = acharDuplicados(state.refs);
@@ -371,7 +375,7 @@ function RevisaoLiteratura({ active = true }) {
   const exportCSV = () => {
     const cab = ["autores", "ano", "titulo", "veiculo", "base", "tipo", "doi", "etapa", "motivo", "tags", "notas"];
     const linhas = [cab.join(";")];
-    state.refs.forEach((r) => linhas.push(cab.map((k) => `"${String(r[k] == null ? "" : r[k]).replace(/"/g, '""')}"`).join(";")));
+    state.refs.forEach((r) => linhas.push(cab.map((k) => `"${String(k === "notas" ? notasTxt(r) : r[k] == null ? "" : r[k]).replace(/"/g, '""')}"`).join(";")));
     dl(new Blob(["﻿" + linhas.join("\n")], { type: "text/csv;charset=utf-8" }), "revisao-referencias.csv");
   };
   const exportSVG = () => dl(new Blob([buildRevisaoSVG(state, ct)], { type: "image/svg+xml" }), "fluxo-revisao.svg");
@@ -381,17 +385,17 @@ function RevisaoLiteratura({ active = true }) {
     img.src = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(svg)));
   };
   const exportJSON = () => dl(new Blob([JSON.stringify(state, null, 2)], { type: "application/json" }), "revisao.json");
-  const abrirJSON = (ev) => { const f = ev.target.files && ev.target.files[0]; if (!f) return; const rr = new FileReader(); rr.onload = () => { try { const o = JSON.parse(String(rr.result)); if (o && Array.isArray(o.refs)) mut(() => ({ ...emptyRevisao(), ...o })); } catch {} }; rr.readAsText(f); ev.target.value = ""; };
+  const abrirJSON = (ev) => { const f = ev.target.files && ev.target.files[0]; if (!f) return; const rr = new FileReader(); rr.onload = () => { try { const o = JSON.parse(String(rr.result)); if (o && Array.isArray(o.refs)) mut(() => migrarRevisao(o)); } catch {} }; rr.readAsText(f); ev.target.value = ""; };
 
   const exportPDF = () => {
     const w = window.open("", "_blank"); if (!w) { try { window.alert("Permita pop-ups para gerar o relatório em PDF."); } catch {} return; }
     const svg = buildRevisaoSVG(state, ct).replace("<svg ", '<svg style="max-width:100%;height:auto" ');
-    const prot = sist ? PROTOCOLO_CAMPOS.filter(([k]) => (state.protocolo[k] || "").trim()).map(([k, rot]) => `<p style="margin:6px 0"><b>${esc(rot)}:</b> ${esc(state.protocolo[k])}</p>`).join("") || "<p style='color:#888'>—</p>" : "";
+    const prot = PROTOCOLO_CAMPOS.filter(([k]) => (state.protocolo[k] || "").trim()).map(([k, rot]) => `<p style="margin:6px 0"><b>${esc(rot)}:</b> ${esc(state.protocolo[k])}</p>`).join("") || "<p style='color:#888'>—</p>";
     const lista = (etapa) => state.refs.filter((r) => r.etapa === etapa)
       .map((r) => `<li>${esc(r.autores || "—")} (${esc(r.ano || "s.d.")}). <b>${esc(r.titulo || "—")}</b>. ${esc(r.veiculo || "")}${r.doi ? ` DOI: ${esc(r.doi)}` : ""}${r.motivo ? ` <i>— ${esc(r.motivo)}</i>` : ""}</li>`).join("");
     const inc = lista("incluido") || "<li>—</li>";
     const exc = lista("excluido_leitura");
-    const doc = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Revisão de literatura</title><style>@media print{.noprint{display:none!important}}@page{margin:14mm}body{font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;color:#2b3a48;margin:0}h2{font-size:15px;border-bottom:1px solid #e3e9ee;padding-bottom:4px;margin-top:22px}ul{font-size:13px;line-height:1.6}table{border-collapse:collapse;font-size:12.5px;margin-top:6px}th,td{border:1px solid #e3e9ee;padding:4px 8px}th{background:#f4f7f9;text-align:left}</style></head><body onload="setTimeout(function(){window.print()},300)"><div class="noprint" style="position:sticky;top:0;display:flex;gap:10px;align-items:center;background:#1f7a8c;color:#fff;padding:10px 16px">Relatório pronto. <button onclick="window.print()" style="border:none;background:#fff;color:#1f7a8c;font-weight:700;border-radius:6px;padding:6px 14px;cursor:pointer">Imprimir / Salvar como PDF</button><span style="font-size:12px;opacity:.85">escolha "Salvar como PDF" no destino</span></div><div style="max-width:1000px;margin:0 auto;padding:24px"><h1 style="font-size:20px">Revisão ${sist ? "sistemática" : "de literatura"}</h1><p style="color:#888;font-size:13px">${ct.identificados} registros identificados · ${ct.incluidos} estudos incluídos</p>${sist ? `<h2>Protocolo</h2>${prot}` : ""}<h2>Fluxo da seleção</h2><div style="border:1px solid #e3e9ee;border-radius:8px;padding:8px">${svg}</div><table><tbody><tr><th>Identificados</th><td>${ct.identificados}</td></tr><tr><th>Duplicados removidos</th><td>${ct.duplicados}</td></tr><tr><th>Triados</th><td>${ct.triados}</td></tr><tr><th>Excluídos na triagem</th><td>${ct.exTriagem}</td></tr>${sist ? `<tr><th>Textos buscados</th><td>${ct.buscados}</td></tr><tr><th>Não recuperados</th><td>${ct.naoRec}</td></tr><tr><th>Avaliados na íntegra</th><td>${ct.avaliados}</td></tr><tr><th>Excluídos na leitura</th><td>${ct.exLeitura}</td></tr>` : ""}<tr><th>Incluídos</th><td><b>${ct.incluidos}</b></td></tr></tbody></table><h2>Estudos incluídos (${ct.incluidos})</h2><ul>${inc}</ul>${exc ? `<h2>Excluídos na leitura, com motivo (${ct.exLeitura})</h2><ul>${exc}</ul>` : ""}${(state.protocolo.notas || "").trim() ? `<h2>Notas</h2><p style="font-size:13px">${esc(state.protocolo.notas)}</p>` : ""}</div></body></html>`;
+    const doc = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Revisão de literatura</title><style>@media print{.noprint{display:none!important}}@page{margin:14mm}body{font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;color:#2b3a48;margin:0}h2{font-size:15px;border-bottom:1px solid #e3e9ee;padding-bottom:4px;margin-top:22px}ul{font-size:13px;line-height:1.6}table{border-collapse:collapse;font-size:12.5px;margin-top:6px}th,td{border:1px solid #e3e9ee;padding:4px 8px}th{background:#f4f7f9;text-align:left}</style></head><body onload="setTimeout(function(){window.print()},300)"><div class="noprint" style="position:sticky;top:0;display:flex;gap:10px;align-items:center;background:#1f7a8c;color:#fff;padding:10px 16px">Relatório pronto. <button onclick="window.print()" style="border:none;background:#fff;color:#1f7a8c;font-weight:700;border-radius:6px;padding:6px 14px;cursor:pointer">Imprimir / Salvar como PDF</button><span style="font-size:12px;opacity:.85">escolha "Salvar como PDF" no destino</span></div><div style="max-width:1000px;margin:0 auto;padding:24px"><h1 style="font-size:20px">Revisão de literatura</h1><p style="color:#888;font-size:13px">${ct.identificados} registros identificados · ${ct.incluidos} estudos incluídos</p><h2>Protocolo</h2>${prot}<h2>Fluxo da seleção</h2><div style="border:1px solid #e3e9ee;border-radius:8px;padding:8px">${svg}</div><table><tbody><tr><th>Identificados</th><td>${ct.identificados}</td></tr><tr><th>Duplicados removidos</th><td>${ct.duplicados}</td></tr><tr><th>Triados</th><td>${ct.triados}</td></tr><tr><th>Excluídos na triagem</th><td>${ct.exTriagem}</td></tr><tr><th>Textos buscados</th><td>${ct.buscados}</td></tr><tr><th>Não recuperados</th><td>${ct.naoRec}</td></tr><tr><th>Avaliados na íntegra</th><td>${ct.avaliados}</td></tr><tr><th>Excluídos na leitura</th><td>${ct.exLeitura}</td></tr><tr><th>Incluídos</th><td><b>${ct.incluidos}</b></td></tr></tbody></table><h2>Estudos incluídos (${ct.incluidos})</h2><ul>${inc}</ul>${exc ? `<h2>Excluídos na leitura, com motivo (${ct.exLeitura})</h2><ul>${exc}</ul>` : ""}${(state.protocolo.notas || "").trim() ? `<h2>Notas</h2><p style="font-size:13px">${esc(state.protocolo.notas)}</p>` : ""}</div></body></html>`;
     w.document.open(); w.document.write(doc); w.document.close();
   };
 
@@ -432,15 +436,8 @@ function RevisaoLiteratura({ active = true }) {
       <div style={{ display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap", padding: "9px 12px", background: "#fff", borderBottom: "1px solid #dde3e9" }}>
         <strong style={{ fontSize: 15, marginRight: 4 }}>Revisão de literatura</strong>
         <div style={{ display: "flex", border: "1px solid #cfd6dd", borderRadius: 6, overflow: "hidden" }}>
-          {[["narrativa", "Narrativa"], ["sistematica", "Sistemática"]].map(([v, l]) => (
-            <button key={v} onClick={() => setModo(v)} style={{ border: "none", padding: "5px 12px", cursor: "pointer", fontSize: 12, fontWeight: 600, background: state.modo === v ? "#2e7d4f" : "#fff", color: state.modo === v ? "#fff" : "#5a6b7a" }}>{l}</button>
-          ))}
-        </div>
-        <Hint text="Narrativa: tabela e um fluxo enxuto. Sistemática: acrescenta o protocolo (pergunta, bases, strings, critérios) e o fluxo completo no formato PRISMA, com textos buscados, não recuperados e excluídos na leitura com motivos. As referências são as mesmas nos dois modos." />
-        <span style={divi} />
-        <div style={{ display: "flex", border: "1px solid #cfd6dd", borderRadius: 6, overflow: "hidden" }}>
           <button onClick={() => setAba("refs")} style={abaBtn("refs")}>Referências</button>
-          {sist && <button onClick={() => setAba("protocolo")} style={abaBtn("protocolo")}>Protocolo</button>}
+          <button onClick={() => setAba("protocolo")} style={abaBtn("protocolo")}>Protocolo</button>
           <button onClick={() => setAba("diagrama")} style={abaBtn("diagrama")}>Diagrama</button>
         </div>
         <span style={divi} />
@@ -476,8 +473,7 @@ function RevisaoLiteratura({ active = true }) {
       {/* faixa de contagens, sempre visível */}
       <div style={{ display: "flex", gap: 14, flexWrap: "wrap", padding: "7px 14px", background: "#fafbfc", borderBottom: "1px solid #eef1f4", fontSize: 12, color: "#46555f" }}>
         {[["identificados", ct.identificados], ["duplicados", ct.duplicados], ["triados", ct.triados], ["excluídos na triagem", ct.exTriagem],
-          ...(sist ? [["não recuperados", ct.naoRec], ["avaliados", ct.avaliados], ["excluídos na leitura", ct.exLeitura]] : []),
-          ["incluídos", ct.incluidos]].map(([l, n]) => (
+          ["não recuperados", ct.naoRec], ["avaliados", ct.avaliados], ["excluídos na leitura", ct.exLeitura], ["incluídos", ct.incluidos]].map(([l, n]) => (
           <span key={l}>{l}: <b style={{ color: l === "incluídos" ? "#2e7d4f" : "#2b3a48" }}>{n}</b></span>
         ))}
         {ct.pendentes > 0 && <span style={{ color: "#b06a1f" }}>· {ct.pendentes} ainda em "Identificado" — defina a etapa para fechar o fluxo</span>}
@@ -514,7 +510,7 @@ function RevisaoLiteratura({ active = true }) {
                         <td style={{ padding: "3px 6px" }}><input style={{ ...cell, width: 100 }} value={r.base} onChange={(e) => setRef(r.id, "base", e.target.value)} /></td>
                         <td style={{ padding: "3px 6px" }}>
                           <select style={{ ...cell, width: 150, color: ETAPA_COR[r.etapa], fontWeight: 600 }} value={r.etapa} onChange={(e) => setRef(r.id, "etapa", e.target.value)}>
-                            {ETAPAS.filter(([k]) => sist || (k !== "nao_recuperado" && k !== "excluido_leitura") || r.etapa === k).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+                            {ETAPAS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
                           </select>
                         </td>
                         <td style={{ padding: "3px 6px" }}>
@@ -546,14 +542,23 @@ function RevisaoLiteratura({ active = true }) {
               </div>
               <label style={lbl}>Resumo</label>
               <textarea style={{ ...inp, minHeight: 60, resize: "vertical" }} value={selRef.resumo} onChange={(e) => setRef(selRef.id, "resumo", e.target.value)} />
-              <label style={lbl}>Notas / extração de dados <Hint text="O que este estudo traz para a sua pergunta: método, contexto, resultados, limites." /></label>
-              <textarea style={{ ...inp, minHeight: 70, resize: "vertical" }} value={selRef.notas} onChange={(e) => setRef(selRef.id, "notas", e.target.value)} />
+              <label style={lbl}>Notas / extração de dados <Hint text="O que este estudo traz para a sua pergunta: método, contexto, resultados, limites. Use uma caixa para cada aspecto — quantas quiser." /></label>
+              {selRef.notas.map((c) => (
+                <div key={c.id} style={{ marginBottom: 8 }}>
+                  <div style={{ display: "flex", gap: 6, marginBottom: 3 }}>
+                    <input style={{ ...inp, fontWeight: 600 }} value={c.titulo} placeholder="título da caixa (opcional) — ex.: método, resultados" onChange={(e) => setCaixa(selRef.id, c.id, "titulo", e.target.value)} />
+                    <button style={{ ...mini, padding: "2px 7px", color: "#b3402f" }} onClick={() => delCaixa(selRef.id, c.id)} title="remover esta caixa">✕</button>
+                  </div>
+                  <textarea style={{ ...inp, minHeight: 70, resize: "vertical" }} value={c.texto} placeholder="anotações" onChange={(e) => setCaixa(selRef.id, c.id, "texto", e.target.value)} />
+                </div>
+              ))}
+              <button style={mini} onClick={() => addCaixa(selRef.id)}>+ Caixa</button>
             </div>
           )}
         </div>
       )}
 
-      {aba === "protocolo" && sist && (
+      {aba === "protocolo" && (
         <div style={{ padding: 12 }}>
           <div style={{ ...card, maxWidth: 820 }}>
             <div style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.4, color: "#5a6b7a" }}>Protocolo da revisão</div>

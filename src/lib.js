@@ -1186,8 +1186,8 @@ function AvisoArmazenamento({ erro, onSalvar, rotuloSalvar = "Salvar arquivo ago
 /* ============================================================
    Gráficos em SVG, feitos à mão.
 
-   O resto do app já desenha tudo assim (diagrama TAR, PRISMA, espaço social,
-   rede de códigos). Manter uma biblioteca de gráficos só para umas barras
+   O resto do app já desenha tudo assim (diagrama TAR, PRISMA, rede de
+   códigos). Manter uma biblioteca de gráficos só para umas barras
    custava ~388 KB — quase 40% do arquivo — num programa cujo ponto é ser um
    arquivo único leve. Estes componentes devolvem um <svg> de verdade, então a
    exportação em PNG/SVG que já existia continua funcionando igual.

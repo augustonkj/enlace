@@ -125,7 +125,6 @@ function emptyProject(name = "Novo projeto") {
     excerpts: [],     // {id, docId, start, end, text, codeIds:[], memo}
     categories: [],   // {id, name, tipo:'emergente'|'apriori', desc, codeIds:[]}
     metatexts: [],    // {id, title, categoryId|null, body}
-    memos: [],        // {id, title, body, updated, alvo:{tipo,id}|null}
     wordExclude: [],  // palavras removidas da nuvem/frequentes
     updated: Date.now(),
   };
@@ -136,7 +135,7 @@ function emptyProject(name = "Novo projeto") {
    e os recortes sem docId passam a pertencer a ele. */
 function migrarProjeto(p) {
   if (!p || typeof p !== "object") return p;
-  const base = { atributos: [], memos: [], wordExclude: [] };
+  const base = { atributos: [], wordExclude: [] };
   if (Array.isArray(p.docs) && p.docs.length) {
     const docAtual = p.docs.some((d) => d.id === p.docAtual) ? p.docAtual : p.docs[0].id;
     const d0 = p.docs[0].id;
@@ -214,7 +213,7 @@ function exportarREFI(project) {
     return `      <TextSource guid="${guidDe("src:" + d.id)}" name="${xmlEsc(d.name)}" richTextPath="" plainTextPath="internal://${guidDe("src:" + d.id)}.txt" creatingUser="${guidDe("user")}" creationDateTime="${agora}">${desc}\n        <PlainTextContent>${xmlEsc(d.text || "")}</PlainTextContent>\n${sel}\n      </TextSource>`;
   }).join("\n");
   const paraNota = (m, rot) => `      <Note guid="${guidDe("note:" + m.id)}" name="${xmlEsc(m.title || rot)}" creatingUser="${guidDe("user")}" creationDateTime="${agora}">\n        <PlainTextContent>${xmlEsc(m.body || "")}</PlainTextContent>\n      </Note>`;
-  const notas = [...(p.metatexts || []).map((m) => paraNota(m, "Metatexto")), ...(p.memos || []).map((m) => paraNota(m, "Memo"))].join("\n");
+  const notas = (p.metatexts || []).map((m) => paraNota(m, "Metatexto")).join("\n");
   return `<?xml version="1.0" encoding="utf-8"?>
 <Project xmlns="urn:QDA-XML:project:1.0" name="${xmlEsc(p.name || "Projeto")}" origin="Enlace" creatingUserGUID="${guidDe("user")}" creationDateTime="${agora}">
   <Users>
@@ -313,99 +312,16 @@ Participante: Eu definiria horários mais claros desde o início e combinaria co
   const metatexts = [
     { id: "m1", title: "Desafios da transição", categoryId: "k1", body: "Os relatos descrevem uma transição inicialmente custosa para o trabalho remoto: problemas técnicos de acesso, a necessidade de construir uma rotina nova, a perda do convívio informal e, mais adiante, a sobrecarga ligada ao tempo de tela. Este é um rascunho de exemplo: substitua por sua própria interpretação, apoiada nos recortes." },
   ];
-  return { id: uid(), name: "Exemplo: entrevista (trabalho remoto)", method: "conteudo", isExample: true, text, codes, excerpts, categories, metatexts, updated: Date.now() };
-}
-function exampleCodingB() {
-  const base = exampleProject();
-  const text = base.text;
-  const codes = base.codes.map((c) => ({ ...c }));
-  const mk = (id, sub, codeIds) => { const start = text.indexOf(sub); return { id, start: start < 0 ? 0 : start, end: start < 0 ? 0 : start + sub.length, text: sub, codeIds, memo: "" }; };
-  // Codificador B: concorda na maior parte, com algumas diferenças realistas
-  // (limites distintos, um recorte a menos, um código trocado e um recorte a mais).
-  const excerpts = [
-    mk("b1", "A internet caía toda hora e eu perdia parte das reuniões", ["c1"]),
-    mk("b2", "Levei umas três semanas para criar uma rotina que funcionasse", ["c2"]), // limite maior que A
-    mk("b3", "me senti bastante isolado", ["c3"]),                                       // limite menor que A
-    mk("b4", "Economizei o tempo do deslocamento, que antes eram duas horas por dia", ["c4"]),
-    mk("b5", "consegui organizar meu trabalho no meu próprio ritmo", ["c5"]),
-    // (B não marcou "Essa flexibilidade foi o que mais valorizei")
-    mk("b7", "eu acabava trabalhando além da hora, respondendo mensagem à noite", ["c6"]),
-    mk("b8", "Eram tarefas demais e eu passava o dia inteiro na tela", ["c6"]),          // A usou c6+c1; B só c6
-    mk("b9", "Senti muita falta da convivência", ["c3"]),                                 // recorte extra de B
-  ];
-  return { id: uid(), name: "Exemplo: codificador B (mesma entrevista)", method: "conteudo", text, codes, excerpts, categories: [], metatexts: [], updated: Date.now() };
-}
-// monta um projeto-exemplo a partir de definições compactas (trechos achados por indexOf)
-function mkExample(method, name, text, codeDefs, exDefs, catDefs, metaDefs) {
-  const codes = codeDefs.map((d, i) => ({ id: d[0], name: d[1], color: PALETTE[i % PALETTE.length], desc: d[2] || "" }));
-  const mk = (id, sub, codeIds, memo = "") => { const start = text.indexOf(sub); return { id, start: start < 0 ? 0 : start, end: start < 0 ? 0 : start + sub.length, text: sub, codeIds, memo }; };
-  const excerpts = exDefs.map((d) => mk(d[0], d[1], d[2], d[3] || ""));
-  const categories = catDefs.map((d) => ({ id: d[0], name: d[1], tipo: d[2] || "emergente", desc: d[3] || "", codeIds: d[4] }));
-  const metatexts = metaDefs.map((d) => ({ id: d[0], title: d[1], categoryId: d[2], body: d[3] }));
-  return { id: uid(), name, method, isExample: true, text, codes, excerpts, categories, metatexts, updated: Date.now() };
-}
-// devolve um exemplo adequado ao método selecionado
-function exampleFor(method) {
-  if (method === "atd") return mkExample("atd", "Exemplo (ATD): aprender ciências",
-    "RELATO — Aprender ciências por investigação\n\nAluno A: No começo eu achava que ciência era decorar fórmulas. Quando começamos a investigar problemas reais, percebi que precisava levantar hipóteses e testá-las. Errar passou a fazer parte do processo, e isso tirou o meu medo de participar.\n\nAluno B: O trabalho em grupo mudou tudo para mim. Discutir com os colegas me fez entender melhor do que ler sozinho. Às vezes a gente discordava, e era justamente aí que eu aprendia.",
-    [["a1", "Ciência como memorização", "visão inicial"], ["a2", "Investigação", "hipóteses e testes"], ["a3", "Erro como aprendizagem"], ["a4", "Interação entre pares"]],
-    [["x1", "ciência era decorar fórmulas", ["a1"]], ["x2", "precisava levantar hipóteses e testá-las", ["a2"]], ["x3", "Errar passou a fazer parte do processo", ["a3"]], ["x4", "Discutir com os colegas me fez entender melhor", ["a4"]], ["x5", "era justamente aí que eu aprendia", ["a3", "a4"]]],
-    [["g1", "Mudança na visão de ciência", "emergente", "de memorizar para investigar", ["a1", "a2"]], ["g2", "Aprender com o outro e com o erro", "emergente", "", ["a3", "a4"]]],
-    [["m1", "Metatexto", "g1", "As unidades reunidas mostram um deslocamento: da ciência como memorização para a ciência como investigação, em que o erro e a interação entre pares passam a ser constitutivos do aprender. (Exemplo — substitua pela sua interpretação.)"]]);
-  if (method === "fenomenologia") return mkExample("fenomenologia", "Exemplo (Fenomenologia): ansiedade na prova",
-    "RELATOS — A vivência da ansiedade antes da prova\n\nSujeito 1: Quando a prova se aproxima, sinto o corpo travar. O coração acelera e parece que o tempo encurta. Mesmo tendo estudado, bate a sensação de que vou esquecer tudo.\n\nSujeito 2: Para mim a ansiedade vem na véspera, à noite. Fico revendo a matéria sem conseguir parar, e o sono não vem. Depois que a prova começa, a tensão diminui.",
-    [["u1", "Reação corporal"], ["u2", "Percepção do tempo"], ["u3", "Medo de esquecer"], ["u4", "Antecipação noturna"], ["u5", "Alívio ao iniciar"]],
-    [["x1", "sinto o corpo travar", ["u1"]], ["x2", "parece que o tempo encurta", ["u2"]], ["x3", "vou esquecer tudo", ["u3"]], ["x4", "a ansiedade vem na véspera, à noite", ["u4"]], ["x5", "Depois que a prova começa, a tensão diminui", ["u5"]]],
-    [["g1", "Corpo e tempo na ansiedade", "emergente", "", ["u1", "u2"]], ["g2", "Antes e durante a prova", "emergente", "", ["u3", "u4", "u5"]]],
-    [["m1", "Síntese", "g1", "A ansiedade antes da prova mostra-se como uma experiência do corpo e do tempo: o corpo se tensiona e o tempo parece encurtar, antecipando um fracasso temido. A vivência concentra-se no 'antes' e se dissolve quando a prova começa. (Exemplo — substitua pela sua síntese.)"]]);
-  if (method === "discurso") return mkExample("discurso", "Exemplo (Discurso): campanha ambiental",
-    "TEXTO — Campanha sobre meio ambiente\n\n\"Cada um de nós é responsável pelo planeta. Pequenas atitudes do dia a dia fazem a diferença: feche a torneira, recicle o lixo, economize energia. O futuro está em suas mãos.\"",
-    [["d1", "Responsabilização individual"], ["d2", "Solução no cotidiano"], ["d3", "Apelo imperativo"]],
-    [["x1", "Cada um de nós é responsável pelo planeta", ["d1"]], ["x2", "Pequenas atitudes do dia a dia fazem a diferença", ["d2"]], ["x3", "O futuro está em suas mãos", ["d3", "d1"]]],
-    [["g1", "Deslocamento da responsabilidade para o indivíduo", "emergente", "a solução é posta no sujeito, não nas estruturas", ["d1", "d2", "d3"]]],
-    [["m1", "Interpretação", "g1", "O texto mobiliza uma formação discursiva que desloca a responsabilidade ambiental para o indivíduo ('cada um', 'suas mãos'), silenciando agentes estruturais (Estado, indústria). As condições de produção — campanhas de consumo consciente — naturalizam a solução individual. (Exemplo — substitua pela sua leitura.)"]]);
-  if (method === "grounded") return mkExample("grounded", "Exemplo (Grounded): adoção de tecnologia",
-    "NOTAS — Adoção de tecnologia por professores\n\nP1: No início eu resistia, achava que ia dar mais trabalho. Comecei a usar quando vi um colega economizando tempo na correção.\n\nP2: O que me convenceu foi o apoio da coordenação e um tempo para testar sem cobrança. Quando senti que dava conta, passei a propor coisas novas.",
-    [["o1", "Resistência inicial"], ["o2", "Influência de pares"], ["o3", "Apoio institucional"], ["o4", "Tempo para experimentar"], ["o5", "Apropriação ativa"]],
-    [["x1", "eu resistia, achava que ia dar mais trabalho", ["o1"]], ["x2", "Comecei a usar quando vi um colega economizando tempo", ["o2"]], ["x3", "o apoio da coordenação", ["o3"]], ["x4", "um tempo para testar sem cobrança", ["o4"]], ["x5", "passei a propor coisas novas", ["o5"]]],
-    [["g1", "Condições que favorecem a adoção", "emergente", "", ["o2", "o3", "o4"]], ["g2", "Da resistência à apropriação", "emergente", "trajetória do professor", ["o1", "o5"]]],
-    [["m1", "Teoria (cod. seletiva)", "g1", "Categoria central: a adoção de tecnologia emerge como um processo gradual e apoiado. A resistência inicial é vencida quando se combinam influência de pares, apoio institucional e tempo para experimentar, levando o professor da resistência à apropriação ativa. (Exemplo — substitua pela sua teorização.)"]]);
-  if (method === "narrativas") return mkExample("narrativas", "Exemplo (Narrativas): como me tornei professora",
-    "NARRATIVA — Como me tornei professora\n\nSempre brinquei de dar aula quando criança, enfileirando bonecas. Na adolescência, uma professora de português me marcou pelo jeito de explicar. Prestei vestibular para Letras meio sem certeza. No estágio, ao ver um aluno entender uma poesia pela primeira vez, soube que era aquilo. Hoje, depois de dez anos, ainda me emociono no primeiro dia de aula.",
-    [["n1", "Origem na infância"], ["n2", "Modelo inspirador"], ["n3", "Escolha incerta"], ["n4", "Momento de virada"], ["n5", "Identidade consolidada"]],
-    [["x1", "brinquei de dar aula quando criança", ["n1"]], ["x2", "uma professora de português me marcou", ["n2"]], ["x3", "Prestei vestibular para Letras meio sem certeza", ["n3"]], ["x4", "ao ver um aluno entender uma poesia pela primeira vez, soube que era aquilo", ["n4"]], ["x5", "ainda me emociono no primeiro dia de aula", ["n5"]]],
-    [["g1", "Enredo de vocação", "emergente", "", ["n1", "n2", "n4"]], ["g2", "Dúvida e confirmação", "emergente", "", ["n3", "n5"]]],
-    [["m1", "Interpretação", "g1", "A narrativa organiza-se como um enredo de vocação: sinais na infância, um modelo inspirador e uma escolha incerta que se confirma num momento de virada (o aluno que compreende a poesia), consolidando a identidade docente. (Exemplo — substitua pela sua interpretação.)"]]);
-  if (method === "bourdieu") return mkExample("bourdieu", "Exemplo (Bourdieu): escolha do curso superior",
-    "ENTREVISTA — A escolha do curso superior\n\nEstudante 1: Na minha casa todo mundo é formado, meu pai é engenheiro e minha mãe professora. Desde criança tinha livro em casa e a gente ia ao teatro, então quando cheguei no ensino médio já era natural que eu fosse fazer faculdade — a dúvida era qual, não se eu iria. Meu pai conhecia um professor da universidade que me explicou como era o curso.\n\nEstudante 2: Eu sou o primeiro da família a chegar na universidade. Meus pais trabalharam a vida toda e sempre disseram que estudo é o que ninguém tira da gente, mas ninguém sabia me explicar como funcionava. Escolhi o curso que dava para pagar e que tinha aula à noite, porque eu trabalho durante o dia. No começo eu me sentia deslocado, achava que falava errado perto dos outros e ficava calado nos seminários. Depois entendi que o que faltava não era capacidade, era saber as regras que os outros já traziam de casa.",
-    [["p1", "Capital cultural herdado", "livros, teatro, diploma dos pais"], ["p2", "Capital social", "rede de contatos que informa e abre portas"], ["p3", "Capital econômico", "restrição material na escolha"], ["p4", "Habitus familiar", "o que é 'natural' esperar"], ["p5", "Violência simbólica", "sentir-se em falta diante da norma legítima"], ["p6", "Estratégia de reprodução"], ["p7", "Trajetória ascendente"]],
-    [["x1", "Na minha casa todo mundo é formado", ["p1", "p4"]],
-     ["x2", "tinha livro em casa e a gente ia ao teatro", ["p1"]],
-     ["x3", "já era natural que eu fosse fazer faculdade — a dúvida era qual, não se eu iria", ["p4", "p6"]],
-     ["x4", "Meu pai conhecia um professor da universidade que me explicou como era o curso", ["p2"]],
-     ["x5", "Eu sou o primeiro da família a chegar na universidade", ["p7"]],
-     ["x6", "Escolhi o curso que dava para pagar e que tinha aula à noite", ["p3"]],
-     ["x7", "achava que falava errado perto dos outros e ficava calado nos seminários", ["p5"]],
-     ["x8", "o que faltava não era capacidade, era saber as regras que os outros já traziam de casa", ["p5", "p1"]]],
-    [["g1", "Capital herdado e naturalização do destino escolar", "apriori", "o diploma como continuidade, não como conquista", ["p1", "p2", "p4", "p6"]],
-     ["g2", "Restrição material e trajetória improvável", "apriori", "a escolha possível dentro do que a condição permite", ["p3", "p7"]],
-     ["g3", "Violência simbólica", "apriori", "a cultura dominante vivida como incompetência pessoal", ["p5"]]],
-    [["m1", "Interpretação", "g1", "As duas falas não descrevem duas escolhas, mas duas posições. Para o Estudante 1, a universidade aparece como prolongamento do habitus familiar: o capital cultural herdado (livros, teatro, diploma dos pais) e o capital social (o professor conhecido) tornam o destino escolar tão evidente que a única dúvida é qual curso — a estratégia de reprodução opera sem precisar ser enunciada. Para o Estudante 2, a mesma instituição exige um capital que ele não herdou; a restrição econômica define o curso possível (noturno, pagável) e a distância entre o habitus de origem e a norma escolar é vivida como falta pessoal ('falava errado'), forma exemplar de violência simbólica — até que ele a reconhece como regra do jogo, e não como incapacidade. (Exemplo — substitua pela sua interpretação.)"]]);
-  const p = exampleProject(); // conteudo / livre usam a entrevista de trabalho remoto
-  if (method === "livre") { p.method = "livre"; p.name = "Exemplo: entrevista (trabalho remoto)"; }
-  return p;
+  return { id: uid(), name: "Exemplo: entrevista (trabalho remoto)", text, codes, excerpts, categories, metatexts, updated: Date.now() };
 }
 const QHELP = [
-  { h: "O que é", items: ["Módulo de análise qualitativa de texto. Apoia o ciclo da Análise de Conteúdo (Bardin: codificação > categorização > inferência) e da Análise Textual Discursiva (Moraes e Galiazzi: unitarização > categorização > metatexto)."] },
-  { h: "Fluxo geral", items: ["1) Na aba Documentos, importe os textos do corpus (.txt, .docx) — vários de uma vez, se quiser. 2) Selecione um trecho e aplique um ou mais códigos; o livro de códigos vale para todos os documentos. 3) Agrupe os códigos em categorias. 4) Na aba Consultas, recupere os recortes de todo o corpus e compare grupos de documentos. 5) Veja o quantitativo (frequências, nuvem de palavras). 6) Escreva o metatexto/inferência. 7) Se houver dois codificadores, confira a concordância na aba Confiabilidade."] },
+  { h: "O que é", items: ["Módulo de análise qualitativa de texto. Apoia o ciclo geral da análise: codificação > categorização > interpretação."] },
+  { h: "Fluxo geral", items: ["1) Na aba Documentos, importe os textos do corpus (.txt, .docx) — vários de uma vez, se quiser. 2) Selecione um trecho e aplique um ou mais códigos; o livro de códigos vale para todos os documentos. 3) Agrupe os códigos em categorias. 4) Na aba Consultas, recupere os recortes de todo o corpus e compare grupos de documentos. 5) Veja o quantitativo (frequências, nuvem de palavras). 6) Escreva o metatexto."] },
   { h: "As abas", items: [
     ["Codificação", "o texto fica à esquerda; selecione um trecho e marque com códigos (cores). Cada trecho marcado é um recorte (unidade de análise). Aqui também se renomeia e se mescla códigos."],
     ["Categorias", "crie categorias e associe códigos a elas. Categoria emergente nasce dos dados; a priori vem da teoria."],
     ["Quantitativo", "frequência de cada código e categoria, co-ocorrências, palavras frequentes e nuvem de palavras (com exportação em PNG/SVG)."],
-    ["Rede", "os códigos como grafo: o tamanho do círculo é o número de recortes e a espessura da ligação é quantas vezes dois códigos foram aplicados ao mesmo recorte. Clicar num código ou numa ligação mostra as citações por trás — não é um desenho à parte, é a sua codificação vista de outro ângulo."],
-    ["Memos", "o diário da análise: por que um código nasceu, mudou de nome ou foi dividido. Cada memo pode se vincular a um código ou documento, e todos entram no relatório em PDF e no .qde."],
-    ["Confiabilidade", "compara duas codificações do mesmo texto e calcula a concordância entre codificadores (kappa de Cohen)."],
-    ["Metatexto", "onde se escreve a interpretação: inferência (Bardin) ou metatexto descritivo-interpretativo (Moraes e Galiazzi). Pode vincular a uma categoria."],
+    ["Metatexto", "onde se escreve a interpretação, apoiada nos recortes. Pode vincular a uma categoria."],
   ] },
   { h: "Importar texto e buscar", items: [
     ["Importar documentos", "pela aba Documentos ou pelo botão no cabeçalho do texto: .txt e .docx (Word). Cada arquivo vira um documento do corpus e o nome do arquivo vira o nome dele — importar NÃO substitui nem apaga o que já foi codificado."],
@@ -422,11 +338,6 @@ const QHELP = [
     ["Nuvem de palavras", "gerada a partir das palavras frequentes; exporte em PNG ou SVG."],
     ["Exportar gráficos", "o gráfico de frequência por código e a nuvem têm botões PNG/SVG (SVG é vetorial, ideal para artigo)."],
   ] },
-  { h: "Confiabilidade entre codificadores", items: [
-    ["Como usar", "as duas codificações precisam ser dos mesmos documentos (pareados pelo nome, com texto idêntico). A é o projeto atual; escolha B em outro projeto ou abrindo um .json. O botão 'carregar exemplo (A e B)' mostra uma demonstração pronta."],
-    ["O que calcula", "kappa de Cohen, concordância observada (Po), esperada por acaso (Pe) e a concordância por código. Os códigos dos dois são pareados pelo nome."],
-    ["Referência", "Cohen (1960); bandas de interpretação de Landis e Koch (1977)."],
-  ] },
   { h: "Salvar e compartilhar", items: [
     ["Salvar / Abrir", "guarda o projeto em .json (documentos, atributos, códigos, recortes, categorias, metatextos)."],
     ["REFI-QDA (.qde)", "o botão .qde exporta no formato de intercâmbio REFI-QDA, que NVivo, MAXQDA e ATLAS.ti abrem; o botão Abrir aceita .qde e .qdc de volta. Serve para não ficar preso a nenhum programa — inclusive a este."],
@@ -437,78 +348,6 @@ const QHELP = [
   ] },
   { h: "Salvamento", items: ["O trabalho é salvo automaticamente no navegador. Para levar a outro computador, use Salvar (.json) ou Salvar Enlace (backup completo)."] },
 ];
-
-// ---- confiabilidade entre codificadores (kappa de Cohen) ----
-// Unidade de análise: caractere. Cada caractere recebe o rótulo do código que o
-// cobre (primeiro recorte que o cobre); sem cobertura = "—". Os códigos dos dois
-// codificadores são pareados pelo NOME (minúsculas).
-// Referência: Cohen, J. (1960). A coefficient of agreement for nominal scales.
-// Educational and Psychological Measurement, 20(1), 37-46. Bandas de interpretação:
-// Landis, J. R., & Koch, G. G. (1977). Biometrics, 33(1), 159-174.
-function coderCharLabels(project, doc) {
-  const text = (doc && doc.text) || "";
-  const labels = new Array(text.length).fill(null);
-  const byId = {}; ((project && project.codes) || []).forEach((c) => { byId[c.id] = c; });
-  for (const ex of exDoDoc(project, doc.id)) {
-    const cid = (ex.codeIds && ex.codeIds[0]) || null;
-    const code = cid ? byId[cid] : null;
-    const name = code ? (code.name || "").trim().toLowerCase() : "";
-    if (!name) continue;
-    const s = Math.max(0, ex.start | 0), e = Math.min(text.length, ex.end | 0);
-    for (let i = s; i < e; i++) if (labels[i] == null) labels[i] = name;
-  }
-  return labels.map((l) => (l == null ? "—" : l));
-}
-function interCoderKappa(projA, projB) {
-  // pareia os documentos dos dois codificadores pelo nome; com um documento de
-  // cada lado, pareia direto. Só entram os pares cujo texto é idêntico.
-  const A = migrarProjeto(projA), B = migrarProjeto(projB);
-  const da = docsDe(A), db = docsDe(B);
-  const pares = [];
-  if (da.length === 1 && db.length === 1) pares.push([da[0], db[0]]);
-  else da.forEach((x) => {
-    const y = db.find((z) => (z.name || "").trim().toLowerCase() === (x.name || "").trim().toLowerCase());
-    if (y) pares.push([x, y]);
-  });
-  const usados = pares.filter(([x, y]) => (x.text || "").length > 0 && x.text === y.text);
-  if (!usados.length) return { sameText: false };
-  const a = [], b = [];
-  usados.forEach(([x, y]) => {
-    const la = coderCharLabels(A, x), lb = coderCharLabels(B, y);
-    for (let i = 0; i < la.length; i++) { a.push(la[i]); b.push(lb[i]); }
-  });
-  const n = a.length;
-  const nDocs = usados.length;
-  const cats = Array.from(new Set([...a, ...b]));
-  const countA = {}, countB = {};
-  let agree = 0, unionCoded = 0, unionAgree = 0;
-  const perCode = {}; cats.forEach((c) => { if (c !== "—") perCode[c] = { both: 0, aOnly: 0, bOnly: 0 }; });
-  for (let i = 0; i < n; i++) {
-    const x = a[i], y = b[i];
-    if (x === y) agree++;
-    countA[x] = (countA[x] || 0) + 1; countB[y] = (countB[y] || 0) + 1;
-    if (x !== "—" || y !== "—") { unionCoded++; if (x === y) unionAgree++; }
-    if (x !== "—" && x === y) perCode[x].both++;
-    else { if (x !== "—") perCode[x].aOnly++; if (y !== "—") perCode[y].bOnly++; }
-  }
-  const po = n ? agree / n : 0;
-  let pe = 0; for (const c of cats) pe += ((countA[c] || 0) / n) * ((countB[c] || 0) / n);
-  const kappa = pe < 1 ? (po - pe) / (1 - pe) : 1;
-  const poUnion = unionCoded ? unionAgree / unionCoded : 0;
-  return {
-    sameText: true, n, nDocs, po, pe, kappa, poUnion, unionCoded, perCode,
-    codesA: Object.keys(countA).filter((c) => c !== "—"),
-    codesB: Object.keys(countB).filter((c) => c !== "—"),
-  };
-}
-function kappaBand(k) {
-  if (k < 0) return "pobre (poor)";
-  if (k <= 0.20) return "leve (slight)";
-  if (k <= 0.40) return "razoável (fair)";
-  if (k <= 0.60) return "moderada (moderate)";
-  if (k <= 0.80) return "substancial (substantial)";
-  return "quase perfeita (almost perfect)";
-}
 
 function parseJSON(text) {
   const clean = text.replace(/```json/gi, "").replace(/```/g, "").trim();
@@ -554,7 +393,6 @@ function escapeHTML(s) {
 
 // gera um HTML autocontido (somente leitura) que abre em qualquer navegador
 function buildStandaloneHTML(project, opts = {}) {
-  const MET = METHODS[(project && project.method) || "livre"] || METHODS.livre;
   const codeMap = Object.fromEntries(project.codes.map((c) => [c.id, c]));
   // um bloco por documento do corpus, cada um com o próprio texto codificado
   const marcar = (segs) => segs.map((seg) => {
@@ -586,11 +424,6 @@ function buildStandaloneHTML(project, opts = {}) {
     return `<div style="margin-bottom:16px"><h3 style="margin:0 0 4px">${escapeHTML(cat.name)} <span style="font-weight:400;color:#999;font-size:13px">(${cat.tipo} · ${exs.length} recortes)</span></h3>${cat.desc ? `<p style="margin:0 0 6px;color:#555">${escapeHTML(cat.desc)}</p>` : ""}<div>${chips}</div></div>`;
   }).join("");
   const metaBlocks = project.metatexts.map((m) => `<div style="margin-bottom:18px"><h3 style="margin:0 0 6px">${escapeHTML(m.title)}</h3><p style="white-space:pre-wrap;line-height:1.7;margin:0">${escapeHTML(m.body)}</p></div>`).join("");
-  const memoBlocks = (project.memos || []).filter((m) => (m.body || "").trim() || (m.title || "").trim()).map((m) => {
-    const alvo = m.alvo && m.alvo.tipo === "codigo" ? (codeMap[m.alvo.id] || {}).name
-      : m.alvo && m.alvo.tipo === "documento" ? nomeDoc(project, m.alvo.id) : "";
-    return `<div style="margin-bottom:14px"><h3 style="margin:0 0 3px;font-size:14px">${escapeHTML(m.title || "Memo")}${alvo ? ` <span style="font-weight:400;color:#999;font-size:12px">(${escapeHTML(alvo)})</span>` : ""}</h3><p style="white-space:pre-wrap;line-height:1.6;margin:0;font-size:13px">${escapeHTML(m.body || "")}</p></div>`;
-  }).join("");
   const stamp = new Date().toLocaleDateString("pt-BR");
   return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHTML(project.name)}</title>
 <style>@media print{.noprint{display:none!important}}@page{margin:18mm}</style></head>
@@ -598,132 +431,24 @@ function buildStandaloneHTML(project, opts = {}) {
 ${opts.print ? `<div class="noprint" style="position:sticky;top:0;display:flex;gap:10px;align-items:center;background:#1f7a8c;color:#fff;padding:10px 16px;font-family:system-ui">Relatório pronto. <button onclick="window.print()" style="border:none;background:#fff;color:#1f7a8c;font-weight:700;border-radius:6px;padding:6px 14px;cursor:pointer">Imprimir / Salvar como PDF</button><span style="font-size:12px;opacity:.85">escolha "Salvar como PDF" no destino da impressão</span></div>` : ""}
 <div style="max-width:880px;margin:0 auto;padding:34px 24px">
 <h1 style="margin:0 0 4px">${escapeHTML(project.name)}</h1>
-<p style="font-family:system-ui;color:#888;font-size:13px;margin:0 0 24px">${escapeHTML(MET.name)} · ${project.excerpts.length} recortes · ${project.codes.length} códigos · ${project.categories.length} categorias · exportado em ${stamp}</p>
-<h2 style="border-bottom:1px solid #e3e9ee;padding-bottom:4px">Texto (${escapeHTML(MET.tabs.codificacao)})</h2>
+<p style="font-family:system-ui;color:#888;font-size:13px;margin:0 0 24px">${project.excerpts.length} recortes · ${project.codes.length} códigos · ${project.categories.length} categorias · exportado em ${stamp}</p>
+<h2 style="border-bottom:1px solid #e3e9ee;padding-bottom:4px">Texto (Codificação)</h2>
 <div style="font-size:16px;line-height:1.9;white-space:pre-wrap;background:#fff;padding:20px;border:1px solid #e3e9ee;border-radius:6px">${textHTML || "<i>(sem texto)</i>"}</div>
 <h2 style="border-bottom:1px solid #e3e9ee;padding-bottom:4px;margin-top:28px">Códigos</h2>
 <ul style="font-family:system-ui;font-size:14px;list-style:none;padding:0">${codeRows || "<li>—</li>"}</ul>
-<h2 style="border-bottom:1px solid #e3e9ee;padding-bottom:4px;margin-top:28px">${escapeHTML(MET.tabs.categorias)}</h2>${catBlocks || "<p>—</p>"}
-<h2 style="border-bottom:1px solid #e3e9ee;padding-bottom:4px;margin-top:28px">${escapeHTML(MET.tabs.metatexto)}</h2>${metaBlocks || "<p>—</p>"}${memoBlocks ? `<h2 style="border-bottom:1px solid #e3e9ee;padding-bottom:4px;margin-top:28px">Memos da análise</h2>${memoBlocks}` : ""}
+<h2 style="border-bottom:1px solid #e3e9ee;padding-bottom:4px;margin-top:28px">Categorias</h2>${catBlocks || "<p>—</p>"}
+<h2 style="border-bottom:1px solid #e3e9ee;padding-bottom:4px;margin-top:28px">Metatexto</h2>${metaBlocks || "<p>—</p>"}
 </div></body></html>`;
 }
 
-// Métodos de análise qualitativa: cada um adapta a terminologia das abas e traz seu passo a passo.
-const METHODS = {
-  livre: {
-    name: "Análise livre / genérica",
-    desc: "Fluxo geral de análise qualitativa, sem amarrar a uma abordagem específica: codifique trechos, agrupe em categorias e escreva a interpretação.",
-    steps: ["Codificar trechos do texto", "Agrupar os códigos em categorias", "Quantitativo (opcional)", "Escrever a interpretação"],
-    tabs: { codificacao: "Codificação", categorias: "Categorias", quantitativo: "Quantitativo", confiabilidade: "Confiabilidade", metatexto: "Metatexto" },
-    show: ["codificacao", "categorias", "quantitativo", "confiabilidade", "metatexto"],
-    catHint: "Crie categorias e associe códigos a elas. Emergentes nascem dos dados; a priori vêm da teoria.",
-    metaHint: "Escreva aqui a interpretação, apoiada nos recortes.",
-  },
-  conteudo: {
-    name: "Análise de Conteúdo (Bardin)",
-    desc: "Análise sistemática das mensagens em três polos: pré-análise, exploração do material e tratamento dos resultados (inferência). As categorias podem ser a priori (vindas da teoria) ou emergentes (dos dados).",
-    steps: ["Pré-análise: ler e organizar o material", "Exploração: recortar unidades e marcar com códigos", "Categorização: agrupar códigos em categorias", "Tratamento e inferência: quantitativo + interpretação"],
-    tabs: { codificacao: "Codificação", categorias: "Categorias", quantitativo: "Quantitativo", confiabilidade: "Confiabilidade", metatexto: "Inferência" },
-    show: ["codificacao", "categorias", "quantitativo", "confiabilidade", "metatexto"],
-    ref: "Bardin, L. Análise de conteúdo.",
-    catHint: "Categorias a priori (da teoria) ou emergentes (dos dados); a frequência por categoria alimenta a inferência.",
-    metaHint: "Escreva a inferência: o que os dados, à luz da teoria e do contexto, permitem concluir.",
-  },
-  atd: {
-    name: "Análise Textual Discursiva (Moraes & Galiazzi)",
-    desc: "Processo auto-organizado em três momentos: unitarização (desmontar o texto em unidades de significado), categorização (agrupamento emergente) e captação do novo emergente (o metatexto).",
-    steps: ["Unitarização: fragmentar o texto em unidades de significado", "Categorização: agrupar as unidades em categorias emergentes", "Metatexto: comunicar o novo compreendido"],
-    tabs: { codificacao: "Unitarização", categorias: "Categorias", quantitativo: "Quantitativo", confiabilidade: "Confiabilidade", metatexto: "Metatexto" },
-    show: ["codificacao", "categorias", "quantitativo", "metatexto"],
-    ref: "Moraes, R.; Galiazzi, M. C. Análise textual discursiva.",
-    catHint: "Categorias emergentes: agrupe as unidades de significado por semelhança, deixando o sistema emergir dos dados.",
-    metaHint: "Escreva o metatexto: comunique o novo compreendido a partir das categorias emergentes.",
-  },
-  fenomenologia: {
-    name: "Fenomenologia",
-    desc: "Busca a estrutura do fenômeno tal como é vivido. Destacam-se unidades de significado nos relatos, faz-se a análise ideográfica (de cada sujeito) e a nomotética (convergências entre sujeitos), até a síntese da estrutura do fenômeno.",
-    steps: ["Leitura dos relatos em atitude fenomenológica", "Unidades de significado: destacar trechos significativos", "Análise ideográfica: agrupar em categorias abertas", "Análise nomotética e síntese: convergências → estrutura"],
-    tabs: { codificacao: "Unidades de significado", categorias: "Categorias abertas", quantitativo: "Convergências", confiabilidade: "Confiabilidade", metatexto: "Síntese" },
-    show: ["codificacao", "categorias", "metatexto"],
-    ref: "Ex.: Giorgi; Bicudo (fenomenologia na pesquisa qualitativa).",
-    catHint: "Categorias abertas (análise ideográfica): agrupe as unidades de significado buscando convergências entre os sujeitos.",
-    metaHint: "Escreva a síntese: a estrutura do fenômeno tal como se mostrou nas convergências entre os sujeitos.",
-  },
-  discurso: {
-    name: "Análise de Discurso",
-    desc: "Analisa não o conteúdo em si, mas como os sentidos são produzidos: recortes discursivos, formações discursivas e as condições de produção (histórico-ideológicas) do discurso.",
-    steps: ["Constituir o corpus discursivo", "Recortes discursivos: destacar sequências significativas", "Formações discursivas: agrupar por regularidades de sentido", "Interpretação: sentidos, posições e condições de produção"],
-    tabs: { codificacao: "Recortes discursivos", categorias: "Formações discursivas", quantitativo: "Quantitativo", confiabilidade: "Confiabilidade", metatexto: "Interpretação" },
-    show: ["codificacao", "categorias", "metatexto"],
-    ref: "Ex.: Pêcheux; Orlandi (análise de discurso).",
-    catHint: "Formações discursivas: agrupe os recortes por regularidades de sentido (não por frequência).",
-    metaHint: "Interprete os sentidos e as formações discursivas, considerando as condições de produção e as posições do sujeito.",
-  },
-  grounded: {
-    name: "Teoria Fundamentada (Grounded Theory)",
-    desc: "Constrói teoria a partir dos dados por níveis de codificação: aberta (rotular incidentes), axial (relacionar categorias) e seletiva (integrar em torno de uma categoria central).",
-    steps: ["Codificação aberta: rotular incidentes nos dados", "Codificação axial: relacionar e agrupar categorias", "Codificação seletiva: integrar em torno da categoria central", "Teoria: articular as relações entre categorias"],
-    tabs: { codificacao: "Codificação aberta", categorias: "Codificação axial", quantitativo: "Quantitativo", confiabilidade: "Confiabilidade", metatexto: "Teoria (cod. seletiva)" },
-    show: ["codificacao", "categorias", "metatexto"],
-    ref: "Ex.: Glaser & Strauss; Charmaz (grounded theory).",
-    catHint: "Codificação axial: relacione e agrupe os códigos abertos em categorias mais densas.",
-    metaHint: "Articule a teoria emergente: a categoria central e suas relações com as demais categorias.",
-  },
-  narrativas: {
-    name: "Análise de Narrativas",
-    desc: "Toma as narrativas como unidade de análise: identifica unidades narrativas, organiza enredos e temas e interpreta os sentidos e recorrências das histórias contadas.",
-    steps: ["Ler as narrativas como totalidades", "Unidades narrativas: destacar episódios/sequências", "Temas e enredos: agrupar por recorrências", "Interpretação: sentidos e recorrências das histórias"],
-    tabs: { codificacao: "Unidades narrativas", categorias: "Temas / enredos", quantitativo: "Quantitativo", confiabilidade: "Confiabilidade", metatexto: "Interpretação" },
-    show: ["codificacao", "categorias", "metatexto"],
-    ref: "Ex.: Clandinin & Connelly; Riessman (pesquisa narrativa).",
-    catHint: "Temas / enredos: agrupe as unidades narrativas por recorrências e por enredos.",
-    metaHint: "Interprete as narrativas: enredos, sentidos atribuídos e recorrências entre as histórias.",
-  },
-  bourdieu: {
-    name: "Análise praxiológica (Bourdieu)",
-    desc: "Lê as práticas como produto da relação entre o habitus (disposições incorporadas na trajetória), o capital (econômico, cultural, social e simbólico) e o campo (espaço de posições em disputa). Não se trata de interpretar o que o sujeito diz, mas de objetivar a posição de onde ele fala — e as disposições que essa posição produz. A sub-aba Campo permite mapear o espaço social dos agentes deste mesmo estudo.",
-    steps: ["Objetivar o campo: posições, capital específico em disputa e regras do jogo", "Marcar no texto os indícios de capital, habitus e posição", "Agrupar em categorias praxiológicas (a priori, vindas da teoria)", "Interpretar: relacionar posição, disposições e práticas — sem cair no determinismo"],
-    tabs: { codificacao: "Indícios (capital/habitus)", categorias: "Categorias praxiológicas", quantitativo: "Quantitativo", confiabilidade: "Confiabilidade", metatexto: "Interpretação" },
-    show: ["codificacao", "categorias", "quantitativo", "metatexto"],
-    ref: "Bourdieu, P. A distinção; O poder simbólico; Razões práticas; A reprodução (com Passeron).",
-    catHint: "Categorias a priori vindas da teoria: capital econômico, cultural, social e simbólico, habitus, trajetória, estratégias de reprodução, violência simbólica, illusio e doxa.",
-    metaHint: "Interprete relacionando a posição no campo, o volume e a estrutura do capital e as disposições do habitus. A pergunta é: de que posição social esta prática é possível — e o que ela reproduz ou subverte?",
-  },
-};
-const METHOD_ORDER = ["livre", "conteudo", "atd", "fenomenologia", "discurso", "grounded", "narrativas", "bourdieu"];
-
-// as abas Documentos e Consultas existem em todos os métodos (não mudam de nome)
-Object.values(METHODS).forEach((m) => {
-  m.tabs = { corpus: "Documentos", recuperacao: "Consultas", rede: "Rede", memos: "Memos", ...m.tabs };
-  if (!m.show.includes("corpus")) m.show = ["corpus", ...m.show];
-  if (!m.show.includes("rede")) {
-    const j = m.show.indexOf("recuperacao");
-    m.show = j >= 0 ? [...m.show.slice(0, j + 1), "rede", ...m.show.slice(j + 1)] : [...m.show, "rede"];
-  }
-  if (!m.show.includes("memos")) m.show = [...m.show, "memos"];
-  if (!m.show.includes("recuperacao")) {
-    const i = m.show.indexOf("categorias");
-    m.show = i >= 0 ? [...m.show.slice(0, i + 1), "recuperacao", ...m.show.slice(i + 1)] : [...m.show, "recuperacao"];
-  }
-});
+// Abas da análise de texto, na ordem em que aparecem.
+const ABAS = { corpus: "Documentos", codificacao: "Codificação", categorias: "Categorias", recuperacao: "Consultas", quantitativo: "Quantitativo", metatexto: "Metatexto" };
 
 
 function App() {
   const [project, setProject] = useState(null);
   const [index, setIndex] = useState([]); // [{id,name}]
   const [tab, setTab] = useState("codificacao");
-  const [showMethodInfo, setShowMethodInfo] = useState(false);
-  const [cmpB, setCmpB] = useState(null);
-  async function onPickB(id) {
-    if (!id) { setCmpB(null); return; }
-    try { const p = await loadKey(STORE.proj(id)); if (p) setCmpB(migrarProjeto(p)); } catch (e) {}
-  }
-  function onFileB(e) {
-    const f = e.target.files?.[0]; if (!f) return;
-    const r = new FileReader();
-    r.onload = () => { const o = parseJSON(String(r.result)); if (o && (typeof o.text === "string" || Array.isArray(o.docs))) setCmpB(migrarProjeto(o)); else { try { window.alert("Arquivo de projeto inválido."); } catch {} } };
-    r.readAsText(f); e.target.value = "";
-  }
   const [pending, setPending] = useState(null); // {start,end,text}
   const [selExcerpt, setSelExcerpt] = useState(null);
   const [pasteMode, setPasteMode] = useState(false);
@@ -774,21 +499,7 @@ function App() {
     }, 600);
   }, [project]);
 
-  const update = useCallback((patch) => setProject((p) => {
-    const np = (typeof patch === "function" ? patch(p) : patch) || {};
-    const merged = { ...p, ...np };
-    if ("text" in np) merged.isExample = false; // material próprio deixa de ser exemplo
-    return merged;
-  }), []);
-  function chooseMethod(m) {
-    if (project && project.isExample) {
-      const ex = exampleFor(m); ex.id = project.id; ex.isExample = true; // troca o exemplo, mesmo "slot"
-      setProject(migrarProjeto(ex)); setIndex((idx) => idx.map((x) => (x.id === ex.id ? { id: ex.id, name: ex.name } : x)));
-      setPending(null); setSelExcerpt(null); setTab("codificacao");
-    } else {
-      update({ method: m });
-    }
-  }
+  const update = useCallback((patch) => setProject((p) => ({ ...p, ...((typeof patch === "function" ? patch(p) : patch) || {}) })), []);
   useEffect(() => {
     SUITE.getQual = async () => {
       let idx = [];
@@ -823,19 +534,11 @@ function App() {
     setProject(p); setPending(null); setSelExcerpt(null);
   }
   async function loadExample() {
-    const p = migrarProjeto(exampleFor((project && project.method) || "livre"));
-    await saveKey(STORE.proj(p.id), p);
-    const ni = [...index, { id: p.id, name: p.name }];
-    setIndex(ni); await saveKey(STORE.index, ni); await saveKey(STORE.active, p.id);
-    setProject(p); setPending(null); setSelExcerpt(null); setTab("codificacao");
-  }
-  async function loadReliabilityExample() {
     const p = migrarProjeto(exampleProject());
     await saveKey(STORE.proj(p.id), p);
     const ni = [...index, { id: p.id, name: p.name }];
     setIndex(ni); await saveKey(STORE.index, ni); await saveKey(STORE.active, p.id);
-    setProject(p); setPending(null); setSelExcerpt(null);
-    setCmpB(migrarProjeto(exampleCodingB())); setTab("confiabilidade");
+    setProject(p); setPending(null); setSelExcerpt(null); setTab("codificacao");
   }
   function excludeWord(word) {
     const w = (word || "").toLowerCase();
@@ -907,13 +610,6 @@ function App() {
     });
     setPending(null); setSelExcerpt(null);
   }
-  function addMemo() {
-    const m = { id: uid(), title: "Novo memo", body: "", alvo: null, updated: Date.now() };
-    update((p) => ({ memos: [m, ...(p.memos || [])] }));
-    return m.id;
-  }
-  function updateMemo(id, patch) { update((p) => ({ memos: (p.memos || []).map((m) => (m.id === id ? { ...m, ...patch, updated: Date.now() } : m)) })); }
-  function removeMemo(id) { update((p) => ({ memos: (p.memos || []).filter((m) => m.id !== id) })); }
   function abrirDoc(id) { update({ docAtual: id }); setPending(null); setSelExcerpt(null); }
   function setAttr(docId, chave, valor) { update((p) => ({ docs: docsDe(p).map((d) => (d.id === docId ? { ...d, attrs: { ...(d.attrs || {}), [chave]: valor } } : d)) })); }
   function addAtributo(nome) {
@@ -1067,13 +763,9 @@ function App() {
     w.document.open(); w.document.write(buildStandaloneHTML(project, { print: true })); w.document.close();
   }
   function exportReport() {
-    const MR = METHODS[(project && project.method) || "livre"] || METHODS.livre;
     const lines = [];
     lines.push("# " + project.name + "\n");
-    lines.push("_Método de análise: " + MR.name + "_\n");
-    lines.push("**Passos:** " + MR.steps.map((s) => s.split(":")[0]).join(" → ") + "\n");
-    if (MR.ref) lines.push("_Referência: " + MR.ref + "_\n");
-    lines.push("## " + MR.tabs.categorias + "\n");
+    lines.push("## Categorias\n");
     project.categories.forEach((cat) => {
       lines.push(`### ${cat.name} (${cat.tipo})`);
       if (cat.desc) lines.push(cat.desc);
@@ -1086,7 +778,7 @@ function App() {
       lines.push("");
     });
     if (project.metatexts.length) {
-      lines.push("## " + MR.tabs.metatexto + "\n");
+      lines.push("## Metatexto\n");
       project.metatexts.forEach((m) => { lines.push(`### ${m.title}`); lines.push(m.body + "\n"); });
     }
     const blob = new Blob([lines.join("\n")], { type: "text/markdown" });
@@ -1162,11 +854,7 @@ function App() {
     panel: "#f7f9fb", accent: "#1f7a8c", accentSoft: "#e6eff3",
   };
 
-  const method = (project && project.method) || "livre";
-  const MET = METHODS[method] || METHODS.livre;
-  const shown = MET.show || ["codificacao", "categorias", "quantitativo", "confiabilidade", "metatexto"];
-  const TABS = shown.map((k) => [k, MET.tabs[k]]);
-  const activeTab = shown.includes(tab) ? tab : shown[0]; // se a aba atual não existe neste método, cai na 1ª
+  const TABS = Object.entries(ABAS);
 
   return (
     <div style={{ fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif", color: C.ink, background: C.paper, height: "88vh", minHeight: 560, display: "flex", flexDirection: "column", borderRadius: 6, overflow: "hidden", border: `1px solid ${C.line}` }}>
@@ -1218,72 +906,38 @@ function App() {
         </div>
       )}
 
-      {/* método de análise */}
-      <div style={{ padding: "8px 16px", background: "#fbfcfd", borderBottom: `1px solid ${C.line}` }}>
-        <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
-          <span style={{ fontSize: 12, color: C.sub, fontWeight: 600 }}>Método de análise:</span>
-          <select value={method} onChange={(e) => chooseMethod(e.target.value)}
-            style={{ fontFamily: "system-ui", fontSize: 12.5, padding: "5px 8px", border: `1px solid ${C.line}`, borderRadius: 4, background: "#fff", fontWeight: 600, color: C.accent }}>
-            {METHOD_ORDER.map((k) => <option key={k} value={k}>{METHODS[k].name}</option>)}
-          </select>
-          <span style={{ fontSize: 11.5, color: C.sub, flex: 1, minWidth: 160 }}>
-            {MET.steps.map((s, i) => s.split(":")[0]).join("  →  ")}
-          </span>
-          <button onClick={() => setShowMethodInfo((v) => !v)} style={{ ...btnStyle(C), fontSize: 11.5, padding: "4px 9px" }}>{showMethodInfo ? "ocultar passos ▾" : "sobre o método ▸"}</button>
-        </div>
-        {showMethodInfo && (
-          <div style={{ marginTop: 8, background: "#fff", border: `1px solid ${C.line}`, borderRadius: 6, padding: "10px 12px" }}>
-            <div style={{ fontSize: 13, color: "#3b4a52", lineHeight: 1.5, marginBottom: 8, textAlign: "justify" }}>{MET.desc}</div>
-            <ol style={{ margin: 0, paddingLeft: 20 }}>
-              {MET.steps.map((s, i) => <li key={i} style={{ fontSize: 12.5, color: "#46555f", lineHeight: 1.5, marginBottom: 2 }}>{s}</li>)}
-            </ol>
-            {MET.ref && <div style={{ marginTop: 8, fontSize: 11, color: C.sub, fontStyle: "italic" }}>{MET.ref}</div>}
-            <div style={{ marginTop: 8, fontSize: 11, color: C.sub }}>As abas abaixo seguem a terminologia deste método; os dados são os mesmos se você trocar de método.</div>
-          </div>
-        )}
-      </div>
-
       {/* tabs */}
       <div style={{ display: "flex", gap: 2, padding: "6px 16px 0", background: C.panel, borderBottom: `1px solid ${C.line}` }}>
         {TABS.map(([k, label]) => (
           <button key={k} onClick={() => setTab(k)} style={{
             fontFamily: "system-ui", fontSize: 13, padding: "7px 14px", border: "none", cursor: "pointer",
-            background: activeTab === k ? C.paper : "transparent", color: activeTab === k ? C.accent : C.sub,
-            borderBottom: activeTab === k ? `2px solid ${C.accent}` : "2px solid transparent", fontWeight: activeTab === k ? 600 : 400,
+            background: tab === k ? C.paper : "transparent", color: tab === k ? C.accent : C.sub,
+            borderBottom: tab === k ? `2px solid ${C.accent}` : "2px solid transparent", fontWeight: tab === k ? 600 : 400,
             borderRadius: "4px 4px 0 0",
           }}>{label}</button>
         ))}
       </div>
 
       <div style={{ flex: 1, overflow: "hidden", display: "flex" }}>
-        {activeTab === "corpus" && (
+        {tab === "corpus" && (
           <CorpusView {...{ project, C, addDocs, renameDoc, removeDoc, abrirDoc, setAttr, addAtributo, removeAtributo, onFile, setTab }} />
         )}
-        {activeTab === "rede" && (
-          <RedeView {...{ project, codeMap, C, abrirDoc, setTab }} />
-        )}
-        {activeTab === "memos" && (
-          <MemosView {...{ project, C, addMemo, updateMemo, removeMemo, codeMap, abrirDoc, setTab }} />
-        )}
-        {activeTab === "recuperacao" && (
+        {tab === "recuperacao" && (
           <ConsultasView {...{ project, codeMap, C, abrirDoc, setTab }} />
         )}
-        {activeTab === "codificacao" && (
+        {tab === "codificacao" && (
           <CodificacaoView {...{ project, segments, codeMap, C, pending, setPending, selExcerpt, setSelExcerpt,
             addCode, assignCode, removeCode, renameCode, setCodeColor, mergeCode, removeExcerpt, setExcerptMemo, toggleCodeOnExcerpt,
             pasteMode, setPasteMode, pasteVal, setPasteVal, applyPaste, fileRef, onFile, onMouseUp, abrirDoc, setTab }} />
         )}
-        {activeTab === "categorias" && (
-          <CategoriasView {...{ project, codeFreq, C, addCategory, updateCategory, removeCategory, toggleCodeInCategory, catHint: MET.catHint, catLabel: MET.tabs.categorias }} />
+        {tab === "categorias" && (
+          <CategoriasView {...{ project, codeFreq, C, addCategory, updateCategory, removeCategory, toggleCodeInCategory }} />
         )}
-        {activeTab === "quantitativo" && (
+        {tab === "quantitativo" && (
           <QuantitativoView {...{ project, codeFreq, catFreq, cooc, codeMap, C, excludeWord, includeWord }} />
         )}
-        {activeTab === "confiabilidade" && (
-          <ConfiabilidadeView {...{ projectA: project, index, cmpB, onPickB, onFileB, onExample: loadReliabilityExample, C }} />
-        )}
-        {activeTab === "metatexto" && (
-          <MetatextoView {...{ project, C, addMetatext, updateMetatext, removeMetatext, metaLabel: MET.tabs.metatexto, metaHint: MET.metaHint }} />
+        {tab === "metatexto" && (
+          <MetatextoView {...{ project, C, addMetatext, updateMetatext, removeMetatext }} />
         )}
       </div>
     </div>
@@ -1508,12 +1162,12 @@ function CodificacaoView(props) {
 }
 
 // ============ CATEGORIAS ============
-function CategoriasView({ project, codeFreq, C, addCategory, updateCategory, removeCategory, toggleCodeInCategory, catHint, catLabel }) {
+function CategoriasView({ project, codeFreq, C, addCategory, updateCategory, removeCategory, toggleCodeInCategory }) {
   const assigned = new Set(project.categories.flatMap((c) => c.codeIds));
   const livres = codeFreq.filter((c) => !assigned.has(c.id));
   return (
     <div style={{ flex: 1, overflow: "auto", padding: 18 }}>
-      {catHint && <div style={{ fontFamily: "system-ui", fontSize: 12.5, color: C.sub, lineHeight: 1.5, marginBottom: 12, background: C.panel, border: `1px solid ${C.line}`, borderRadius: 6, padding: "8px 10px" }}><b>{catLabel || "Categorias"}:</b> {catHint}</div>}
+      <div style={{ fontFamily: "system-ui", fontSize: 12.5, color: C.sub, lineHeight: 1.5, marginBottom: 12, background: C.panel, border: `1px solid ${C.line}`, borderRadius: 6, padding: "8px 10px" }}><b>Categorias:</b> Crie categorias e associe códigos a elas. Emergentes nascem dos dados; a priori vêm da teoria.</div>
       <div style={{ display: "flex", gap: 8, marginBottom: 16, alignItems: "center" }}>
         <button onClick={() => addCategory("Nova categoria", "emergente")} style={{ ...btnStyle(C), background: C.accent, color: "#fff", border: "none" }}>+ categoria emergente</button>
         <button onClick={() => addCategory("Nova categoria", "apriori")} style={btnStyle(C)}>+ categoria a priori</button>
@@ -1695,107 +1349,16 @@ function SectionTitle({ children, C }) {
 }
 function Empty({ C }) { return <div style={{ fontFamily: "system-ui", fontSize: 13, color: C.sub, marginBottom: 20 }}>Sem dados ainda.</div>; }
 
-// ============ CONFIABILIDADE ENTRE CODIFICADORES ============
-function ConfiabilidadeView({ projectA, index, cmpB, onPickB, onFileB, onExample, C }) {
-  const res = useMemo(() => (cmpB ? interCoderKappa(projectA, cmpB) : null), [projectA, cmpB]);
-  const pct = (x) => (x * 100).toFixed(1) + "%";
-  const others = (index || []).filter((p) => p.id !== projectA.id);
-  return (
-    <div style={{ flex: 1, overflow: "auto", padding: 18, fontFamily: "system-ui" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
-        <SectionTitle C={C}>Confiabilidade entre codificadores</SectionTitle>
-        <button onClick={onExample} style={{ ...btnStyle(C), fontSize: 11, marginBottom: 10, background: C.accent, color: "#fff", border: "none" }} title="carrega a entrevista de exemplo já com duas codificações (A e B) para ver o cálculo">carregar exemplo (A e B)</button>
-      </div>
-      <div style={{ fontSize: 13, color: C.sub, lineHeight: 1.5, marginBottom: 14, maxWidth: 720 }}>
-        Escolha a <b>Codificação B</b> abaixo (outro projeto ou um arquivo .json) para comparar com o projeto atual,
-        ou clique em <b>carregar exemplo (A e B)</b> para ver uma demonstração pronta. As duas codificações precisam ser do mesmo texto;
-        os códigos são pareados pelo nome.
-      </div>
-      <div style={{ display: "flex", gap: 28, flexWrap: "wrap", marginBottom: 18 }}>
-        <div>
-          <div style={{ fontSize: 11, color: C.sub, marginBottom: 4 }}>CODIFICAÇÃO A (projeto atual)</div>
-          <div style={{ fontWeight: 600 }}>{projectA.name}</div>
-        </div>
-        <div>
-          <div style={{ fontSize: 11, color: C.sub, marginBottom: 4 }}>CODIFICAÇÃO B</div>
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <select value={(cmpB && cmpB.id) || ""} onChange={(e) => onPickB(e.target.value)}
-              style={{ fontSize: 12, padding: "5px 8px", border: `1px solid ${C.line}`, borderRadius: 4, background: "#fff" }}>
-              <option value="">— escolher projeto —</option>
-              {others.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
-            <span style={{ fontSize: 11, color: C.sub }}>ou</span>
-            <label style={{ ...btnStyle(C), fontSize: 12 }}>abrir .json<input type="file" accept=".json,application/json" onChange={onFileB} style={{ display: "none" }} /></label>
-          </div>
-          {cmpB && <div style={{ fontSize: 12, marginTop: 4 }}>B: <b>{cmpB.name}</b></div>}
-        </div>
-      </div>
-
-      {!cmpB && <Empty C={C} />}
-      {cmpB && res && !res.sameText && (
-        <div style={{ fontSize: 13, color: "#b3261e", background: "#fdecea", border: "1px solid #f5c6c0", borderRadius: 6, padding: "10px 14px", maxWidth: 720 }}>
-          As duas codificações precisam ser exatamente do mesmo texto. Confira se A e B partem do mesmo material.
-        </div>
-      )}
-      {cmpB && res && res.sameText && (
-        <>
-          <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
-            <Stat label="kappa de Cohen (κ)" value={res.kappa.toFixed(3)} C={C} />
-            <Stat label="observada (Po)" value={pct(res.po)} C={C} />
-            <Stat label="por acaso (Pe)" value={pct(res.pe)} C={C} />
-            <Stat label="nos trechos codificados" value={pct(res.poUnion)} C={C} />
-          </div>
-          <div style={{ fontSize: 13, marginBottom: 18, maxWidth: 720 }}>
-            Concordância <b>{kappaBand(res.kappa)}</b> pela escala de Landis & Koch (1977), sobre {res.n.toLocaleString("pt-BR")} caracteres
-            {" "}({res.unionCoded.toLocaleString("pt-BR")} codificados por ao menos um codificador).
-          </div>
-
-          <SectionTitle C={C}>Concordância por código</SectionTitle>
-          {Object.keys(res.perCode).length > 0 ? (
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, marginBottom: 18, maxWidth: 620 }}>
-              <thead><tr style={{ textAlign: "left", color: C.sub, borderBottom: `1px solid ${C.line}` }}>
-                <th style={{ padding: 6 }}>Código</th><th>Ambos</th><th>Só A</th><th>Só B</th><th>Concord.</th>
-              </tr></thead>
-              <tbody>
-                {Object.entries(res.perCode).sort((x, y) => (y[1].both + y[1].aOnly + y[1].bOnly) - (x[1].both + x[1].aOnly + x[1].bOnly)).map(([name, v]) => {
-                  const tot = v.both + v.aOnly + v.bOnly;
-                  return (
-                    <tr key={name} style={{ borderBottom: `1px solid ${C.line}` }}>
-                      <td style={{ padding: 6, fontWeight: 600 }}>{name}</td>
-                      <td>{v.both}</td><td>{v.aOnly}</td><td>{v.bOnly}</td>
-                      <td>{tot ? Math.round((v.both / tot) * 100) : 0}%</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          ) : <Empty C={C} />}
-          {(res.codesA.length === 0 || res.codesB.length === 0) && (
-            <div style={{ fontSize: 12, color: C.sub, marginBottom: 12 }}>Atenção: uma das codificações não tem códigos aplicados.</div>
-          )}
-
-          <SectionTitle C={C}>Modelo utilizado</SectionTitle>
-          <div style={{ fontSize: 12.5, color: C.sub, lineHeight: 1.6, maxWidth: 720 }}>
-            κ = (Po − Pe) / (1 − Pe), em que Po é a concordância observada e Pe a concordância esperada ao acaso.
-            <div style={{ marginTop: 6 }}>Cohen, J. (1960). A coefficient of agreement for nominal scales. <i>Educational and Psychological Measurement</i>, 20(1), 37-46.</div>
-            <div>Landis, J. R., &amp; Koch, G. G. (1977). The measurement of observer agreement for categorical data. <i>Biometrics</i>, 33(1), 159-174.</div>
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
 // ============ METATEXTO ============
-function MetatextoView({ project, C, addMetatext, updateMetatext, removeMetatext, metaLabel = "Metatexto", metaHint = "Escreva aqui a interpretação, apoiada nos recortes." }) {
-  const lower = metaLabel.toLowerCase();
+function MetatextoView({ project, C, addMetatext, updateMetatext, removeMetatext }) {
+  const metaHint = "Escreva aqui a interpretação, apoiada nos recortes.";
   return (
     <div style={{ flex: 1, overflow: "auto", padding: 18 }}>
       <div style={{ display: "flex", gap: 8, marginBottom: 16, alignItems: "center" }}>
         <button onClick={() => addMetatext(null)} style={{ ...btnStyle(C), background: C.accent, color: "#fff", border: "none" }}>+ novo texto</button>
         <span style={{ fontFamily: "system-ui", fontSize: 11, color: C.sub }}>vincule a uma categoria para gerar a partir dos excertos</span>
       </div>
-      {project.metatexts.length === 0 && <div style={{ fontFamily: "system-ui", fontSize: 13, color: C.sub }}>Nenhum texto ainda. É aqui que se escreve a etapa de <b>{lower}</b>: {metaHint}</div>}
+      {project.metatexts.length === 0 && <div style={{ fontFamily: "system-ui", fontSize: 13, color: C.sub }}>Nenhum texto ainda. É aqui que se escreve a etapa de <b>metatexto</b>: {metaHint}</div>}
       {project.metatexts.map((m) => (
         <div key={m.id} style={{ background: C.panel, border: `1px solid ${C.line}`, borderRadius: 6, padding: 16, marginBottom: 16, maxWidth: 820 }}>
           <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 10 }}>
@@ -2155,304 +1718,6 @@ function ConsultasView({ project, codeMap, C, abrirDoc, setTab }) {
           )}
         </div>
       )}
-    </div>
-  );
-}
-
-
-/* ============ MEMOS (diário da análise) ============ */
-function MemosView({ project, C, addMemo, updateMemo, removeMemo, codeMap, abrirDoc, setTab }) {
-  const [sel, setSel] = React.useState(null);
-  const memos = project.memos || [];
-  const atual = sel ? memos.find((m) => m.id === sel) : null;
-  const inp = { fontFamily: "system-ui", fontSize: 13, padding: "6px 8px", border: `1px solid ${C.line}`, borderRadius: 4, width: "100%", boxSizing: "border-box" };
-  const alvoLabel = (m) => {
-    if (!m.alvo || !m.alvo.tipo) return "geral";
-    if (m.alvo.tipo === "codigo") return "código: " + ((codeMap[m.alvo.id] || {}).name || "?");
-    if (m.alvo.tipo === "documento") return "documento: " + nomeDoc(project, m.alvo.id);
-    return "geral";
-  };
-  return (
-    <div style={{ flex: 1, overflow: "auto", padding: 16, display: "flex", gap: 16, flexWrap: "wrap", alignItems: "flex-start" }}>
-      <div style={{ flex: "0 1 300px", minWidth: 240 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-          <div style={{ fontWeight: 700, fontSize: 14 }}>Memos</div>
-          <Btn onClick={() => { const m = addMemo(); setSel(m); }}>+ memo</Btn>
-        </div>
-        <div style={{ fontSize: 11.5, color: C.sub, marginBottom: 10, lineHeight: 1.6 }}>
-          O diário da análise: decisões, dúvidas, hipóteses e por que um código nasceu ou mudou de nome.
-          É o que reconstitui o percurso quando a banca perguntar como você chegou ali.
-        </div>
-        <div style={{ border: `1px solid ${C.line}`, borderRadius: 6, maxHeight: 420, overflowY: "auto" }}>
-          {memos.map((m) => (
-            <div key={m.id} onClick={() => setSel(m.id)}
-              style={{ padding: "8px 10px", borderBottom: `1px solid ${C.line}`, cursor: "pointer", background: sel === m.id ? C.accentSoft : "transparent" }}>
-              <div style={{ fontSize: 13, fontWeight: 600 }}>{m.title || "(sem título)"}</div>
-              <div style={{ fontSize: 11, color: C.sub }}>{alvoLabel(m)} · {new Date(m.updated || Date.now()).toLocaleDateString("pt-BR")}</div>
-              <div style={{ fontSize: 11.5, color: C.sub, marginTop: 2, maxHeight: 32, overflow: "hidden" }}>{(m.body || "").slice(0, 90)}</div>
-            </div>
-          ))}
-          {!memos.length && <div style={{ padding: 14, fontSize: 12.5, color: C.sub }}>Nenhum memo ainda.</div>}
-        </div>
-      </div>
-      <div style={{ flex: "1 1 380px", minWidth: 300 }}>
-        {atual ? (
-          <div style={{ border: `1px solid ${C.line}`, borderRadius: 6, padding: 14 }}>
-            <input style={{ ...inp, fontSize: 15, fontWeight: 700 }} value={atual.title} placeholder="título do memo"
-              onChange={(e) => updateMemo(atual.id, { title: e.target.value })} />
-            <div style={{ display: "flex", gap: 8, alignItems: "center", margin: "10px 0", flexWrap: "wrap" }}>
-              <span style={{ fontSize: 12, color: C.sub }}>Vincular a:</span>
-              <select style={{ ...inp, width: "auto" }} value={atual.alvo && atual.alvo.tipo ? atual.alvo.tipo + ":" + atual.alvo.id : ""}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  if (!v) return updateMemo(atual.id, { alvo: null });
-                  const [tipo, id] = v.split(":");
-                  updateMemo(atual.id, { alvo: { tipo, id } });
-                }}>
-                <option value="">— nada (memo geral) —</option>
-                <optgroup label="Códigos">
-                  {(project.codes || []).map((c) => <option key={c.id} value={"codigo:" + c.id}>{c.name}</option>)}
-                </optgroup>
-                <optgroup label="Documentos">
-                  {docsDe(project).map((d) => <option key={d.id} value={"documento:" + d.id}>{d.name}</option>)}
-                </optgroup>
-              </select>
-              {atual.alvo && atual.alvo.tipo === "documento" && (
-                <Btn onClick={() => { abrirDoc(atual.alvo.id); setTab("codificacao"); }}>abrir documento</Btn>
-              )}
-              <div style={{ flex: 1 }} />
-              <Btn onClick={() => { removeMemo(atual.id); setSel(null); }} danger>excluir</Btn>
-            </div>
-            <textarea style={{ ...inp, minHeight: 300, resize: "vertical", lineHeight: 1.6 }} value={atual.body}
-              placeholder="o que você decidiu, o que ficou em dúvida, o que mudou e por quê…"
-              onChange={(e) => updateMemo(atual.id, { body: e.target.value })} />
-          </div>
-        ) : (
-          <div style={{ fontSize: 12.5, color: C.sub, padding: 20 }}>Escolha um memo à esquerda, ou crie um novo.</div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-/* ============ REDE DE CÓDIGOS, LIGADA ÀS CITAÇÕES ============
-   Os nós são os códigos (tamanho = nº de recortes) e as ligações são as
-   co-ocorrências: dois códigos se ligam quando aparecem NO MESMO recorte.
-   Nada aqui é desenhado à mão — a rede é a codificação vista de outro ângulo,
-   e clicar num nó ou numa ligação mostra os recortes que a sustentam. */
-const RW = 900, RH = 560;
-
-function layoutRede(nos, arestas, iteracoes = 320) {
-  const n = nos.length;
-  if (!n) return [];
-  // começa num círculo (determinístico: a mesma codificação dá sempre o mesmo desenho)
-  const pos = nos.map((_, i) => ({
-    x: RW / 2 + RW * 0.33 * Math.cos((2 * Math.PI * i) / n),
-    y: RH / 2 + RH * 0.33 * Math.sin((2 * Math.PI * i) / n),
-  }));
-  const k = Math.sqrt((RW * RH) / n) * 0.52;
-  let temp = RW * 0.07;
-  for (let it = 0; it < iteracoes; it++) {
-    const d = pos.map(() => ({ x: 0, y: 0 }));
-    for (let i = 0; i < n; i++) {
-      for (let j = i + 1; j < n; j++) {
-        let dx = pos[i].x - pos[j].x, dy = pos[i].y - pos[j].y;
-        let dist = Math.hypot(dx, dy) || 0.01;
-        const f = (k * k) / dist;                     // repulsão
-        dx /= dist; dy /= dist;
-        d[i].x += dx * f; d[i].y += dy * f; d[j].x -= dx * f; d[j].y -= dy * f;
-      }
-    }
-    arestas.forEach((a) => {
-      let dx = pos[a.i].x - pos[a.j].x, dy = pos[a.i].y - pos[a.j].y;
-      let dist = Math.hypot(dx, dy) || 0.01;
-      const f = ((dist * dist) / k) * Math.min(2.5, 0.6 + a.n * 0.35); // atração pelo peso
-      dx /= dist; dy /= dist;
-      d[a.i].x -= dx * f; d[a.i].y -= dy * f; d[a.j].x += dx * f; d[a.j].y += dy * f;
-    });
-    for (let i = 0; i < n; i++) {
-      const m = Math.hypot(d[i].x, d[i].y) || 0.01;
-      pos[i].x += (d[i].x / m) * Math.min(m, temp);
-      pos[i].y += (d[i].y / m) * Math.min(m, temp);
-      pos[i].x = Math.max(46, Math.min(RW - 46, pos[i].x));
-      pos[i].y = Math.max(38, Math.min(RH - 38, pos[i].y));
-    }
-    temp = Math.max(0.8, temp * 0.972);
-  }
-  return pos;
-}
-
-function redeDoProjeto(project, { docFiltro = "", minimo = 1 } = {}) {
-  const recortes = (project.excerpts || []).filter((e) => !docFiltro || e.docId === docFiltro);
-  const freq = {};
-  recortes.forEach((e) => [...new Set(e.codeIds || [])].forEach((id) => { freq[id] = (freq[id] || 0) + 1; }));
-  const nos = (project.codes || []).filter((c) => freq[c.id]).map((c) => ({ ...c, n: freq[c.id] }));
-  const idx = {}; nos.forEach((c, i) => (idx[c.id] = i));
-  const pares = {};
-  recortes.forEach((e) => {
-    const ids = [...new Set(e.codeIds || [])].filter((id) => idx[id] != null);
-    for (let a = 0; a < ids.length; a++)
-      for (let b = a + 1; b < ids.length; b++) {
-        const ch = [ids[a], ids[b]].sort().join("|");
-        pares[ch] = (pares[ch] || 0) + 1;
-      }
-  });
-  const arestas = Object.entries(pares).map(([ch, n]) => {
-    const [a, b] = ch.split("|");
-    return { a, b, n, i: idx[a], j: idx[b] };
-  }).filter((x) => x.n >= minimo).sort((x, y) => y.n - x.n);
-  return { nos, arestas, recortes };
-}
-
-function buildRedeInner(nos, arestas, pos, sel) {
-  const o = [];
-  const maxN = Math.max(1, ...nos.map((c) => c.n));
-  const maxE = Math.max(1, ...arestas.map((a) => a.n));
-  const raio = (c) => 9 + (c.n / maxN) * 17;
-  arestas.forEach((a) => {
-    const on = sel && sel.tipo === "aresta" && sel.a === a.a && sel.b === a.b;
-    const p1 = pos[a.i], p2 = pos[a.j];
-    if (!p1 || !p2) return;
-    o.push(`<line x1="${p1.x.toFixed(1)}" y1="${p1.y.toFixed(1)}" x2="${p2.x.toFixed(1)}" y2="${p2.y.toFixed(1)}" stroke="${on ? "#1f7a8c" : "#9aa7b2"}" stroke-width="${(1 + (a.n / maxE) * 5).toFixed(1)}" stroke-opacity="${on ? 1 : 0.55}"/>`);
-    if (a.n > 1 || on) {
-      const mx = (p1.x + p2.x) / 2, my = (p1.y + p2.y) / 2;
-      o.push(`<circle cx="${mx.toFixed(1)}" cy="${my.toFixed(1)}" r="8.5" fill="#ffffff" stroke="${on ? "#1f7a8c" : "#cfd6dd"}"/>`);
-      o.push(`<text x="${mx.toFixed(1)}" y="${(my + 3.5).toFixed(1)}" font-size="10" fill="#5a6b7a" text-anchor="middle">${a.n}</text>`);
-    }
-  });
-  nos.forEach((c, i) => {
-    const p = pos[i]; if (!p) return;
-    const on = sel && sel.tipo === "no" && sel.id === c.id;
-    const r = raio(c);
-    o.push(`<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${r.toFixed(1)}" fill="${c.color}" fill-opacity="0.85" stroke="${on ? "#13313a" : "#ffffff"}" stroke-width="${on ? 3 : 1.8}"/>`);
-    o.push(`<text x="${p.x.toFixed(1)}" y="${(p.y + r + 13).toFixed(1)}" font-size="11.5" fill="#2b3a48" text-anchor="middle" stroke="#ffffff" stroke-width="3" paint-order="stroke">${escapeHTML(c.name)}</text>`);
-    o.push(`<text x="${p.x.toFixed(1)}" y="${(p.y + 4).toFixed(1)}" font-size="10.5" fill="#ffffff" text-anchor="middle" font-weight="700">${c.n}</text>`);
-  });
-  return o.join("");
-}
-function buildRedeSVG(nos, arestas, pos, sel) {
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${RW} ${RH}" width="${RW}" height="${RH}" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"><rect width="${RW}" height="${RH}" fill="#ffffff"/>${buildRedeInner(nos, arestas, pos, sel)}</svg>`;
-}
-
-function RedeView({ project, codeMap, C, abrirDoc, setTab }) {
-  const [sel, setSel] = React.useState(null);       // {tipo:"no"|"aresta", ...}
-  const [minimo, setMinimo] = React.useState(1);
-  const [docFiltro, setDocFiltro] = React.useState("");
-  const svgRef = React.useRef(null);
-
-  const { nos, arestas, recortes } = React.useMemo(() => redeDoProjeto(project, { docFiltro, minimo }), [project, docFiltro, minimo]);
-  const pos = React.useMemo(() => layoutRede(nos, arestas), [nos, arestas]);
-  const inner = React.useMemo(() => buildRedeInner(nos, arestas, pos, sel), [nos, arestas, pos, sel]);
-  React.useEffect(() => { if (svgRef.current) svgRef.current.innerHTML = inner; }, [inner]);
-
-  // citações por trás do que está selecionado
-  const citacoes = React.useMemo(() => {
-    if (!sel) return [];
-    if (sel.tipo === "no") return recortes.filter((e) => (e.codeIds || []).includes(sel.id));
-    return recortes.filter((e) => (e.codeIds || []).includes(sel.a) && (e.codeIds || []).includes(sel.b));
-  }, [sel, recortes]);
-
-  const clique = (ev) => {
-    const svg = svgRef.current; if (!svg) return;
-    const r = svg.getBoundingClientRect();
-    if (!r.width) return;
-    const x = ((ev.clientX - r.left) / r.width) * RW, y = ((ev.clientY - r.top) / r.height) * RH;
-    let melhor = null, dmin = Infinity;
-    nos.forEach((c, i) => { const d = Math.hypot(pos[i].x - x, pos[i].y - y); if (d < dmin) { dmin = d; melhor = { tipo: "no", id: c.id }; } });
-    if (dmin <= 30) { setSel(sel && sel.tipo === "no" && sel.id === melhor.id ? null : melhor); return; }
-    let melhorA = null, dminA = Infinity;
-    arestas.forEach((a) => {
-      const mx = (pos[a.i].x + pos[a.j].x) / 2, my = (pos[a.i].y + pos[a.j].y) / 2;
-      const d = Math.hypot(mx - x, my - y);
-      if (d < dminA) { dminA = d; melhorA = { tipo: "aresta", a: a.a, b: a.b, n: a.n }; }
-    });
-    setSel(dminA <= 26 ? melhorA : null);
-  };
-
-  const baixar = (blob, nome) => { const u = URL.createObjectURL(blob); const el = document.createElement("a"); el.href = u; el.download = nome; el.click(); setTimeout(() => URL.revokeObjectURL(u), 1500); };
-  const exportarSVG = () => baixar(new Blob([buildRedeSVG(nos, arestas, pos, null)], { type: "image/svg+xml" }), "rede-codigos.svg");
-  const exportarPNG = () => {
-    const img = new Image();
-    img.onload = () => { const cv = document.createElement("canvas"); cv.width = RW * 2; cv.height = RH * 2; const cx = cv.getContext("2d"); cx.scale(2, 2); cx.drawImage(img, 0, 0); cv.toBlob((b) => b && baixar(b, "rede-codigos.png")); };
-    img.src = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(buildRedeSVG(nos, arestas, pos, null))));
-  };
-
-  const sels = { fontFamily: "system-ui", fontSize: 12.5, padding: "4px 7px", border: `1px solid ${C.line}`, borderRadius: 4, background: "#fff" };
-  const titulo = sel ? (sel.tipo === "no" ? (codeMap[sel.id] || {}).name : `${(codeMap[sel.a] || {}).name} + ${(codeMap[sel.b] || {}).name}`) : null;
-
-  return (
-    <div style={{ flex: 1, overflow: "auto", padding: 16 }}>
-      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginBottom: 8 }}>
-        <div style={{ fontWeight: 700, fontSize: 14 }}>Rede de códigos</div>
-        <span style={{ fontSize: 11.5, color: C.sub }}>{nos.length} códigos · {arestas.length} ligações · {recortes.length} recortes</span>
-        <select style={sels} value={docFiltro} onChange={(e) => { setDocFiltro(e.target.value); setSel(null); }}>
-          <option value="">todos os documentos</option>
-          {docsDe(project).map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
-        </select>
-        <label style={{ fontSize: 12, color: C.sub, display: "flex", alignItems: "center", gap: 5 }}>
-          co-ocorrência mínima
-          <input type="number" min="1" max="20" value={minimo} onChange={(e) => setMinimo(Math.max(1, +e.target.value || 1))} style={{ ...sels, width: 54 }} />
-        </label>
-        <Btn onClick={exportarPNG}>PNG</Btn>
-        <Btn onClick={exportarSVG}>SVG</Btn>
-      </div>
-      <div style={{ fontSize: 11.5, color: C.sub, marginBottom: 10, lineHeight: 1.6 }}>
-        Dois códigos se ligam quando foram aplicados <b>ao mesmo recorte</b>; o número na ligação é quantas vezes isso
-        aconteceu, e o número dentro do círculo é quantos recortes o código tem. Clique num código ou numa ligação para
-        ver as citações que sustentam aquilo — a rede não é um desenho à parte, é a sua codificação vista de outro ângulo.
-      </div>
-
-      <div style={{ display: "flex", gap: 14, flexWrap: "wrap", alignItems: "flex-start" }}>
-        <div style={{ flex: "1 1 520px", minWidth: 320, border: `1px solid ${C.line}`, borderRadius: 6, padding: 6 }}>
-          {nos.length ? (
-            <svg ref={svgRef} viewBox={`0 0 ${RW} ${RH}`} onClick={clique} style={{ width: "100%", height: "auto", display: "block", cursor: "pointer" }} />
-          ) : (
-            <div style={{ padding: "50px 20px", textAlign: "center", color: C.sub, fontSize: 13 }}>
-              Nenhum código aplicado ainda — codifique alguns trechos para a rede aparecer.
-            </div>
-          )}
-        </div>
-        <div style={{ flex: "0 1 320px", minWidth: 260 }}>
-          {sel ? (
-            <div style={{ border: `1px solid ${C.line}`, borderRadius: 6, padding: 12 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: C.sub, textTransform: "uppercase", letterSpacing: 0.4 }}>
-                {sel.tipo === "no" ? "Código" : "Co-ocorrência"}
-              </div>
-              <div style={{ fontSize: 14, fontWeight: 700, margin: "3px 0 8px" }}>{titulo}</div>
-              <div style={{ fontSize: 12, color: C.sub, marginBottom: 8 }}>
-                {citacoes.length} citação(ões){sel.tipo === "aresta" ? " em que os dois códigos aparecem juntos" : ""}
-              </div>
-              <div style={{ maxHeight: 380, overflowY: "auto" }}>
-                {citacoes.map((e) => (
-                  <div key={e.id} style={{ borderTop: `1px solid ${C.line}`, padding: "7px 0" }}>
-                    <button onClick={() => { abrirDoc(e.docId); setTab("codificacao"); }} style={{ ...btnStyle(C), fontSize: 10.5, padding: "2px 7px", marginBottom: 3 }}>
-                      {nomeDoc(project, e.docId)}
-                    </button>
-                    <div style={{ fontSize: 12.5, lineHeight: 1.5 }}>“{e.text}”</div>
-                    {e.memo && <div style={{ fontSize: 11.5, color: C.sub, marginTop: 2 }}>memo: {e.memo}</div>}
-                  </div>
-                ))}
-              </div>
-              <Btn onClick={() => setSel(null)}>limpar seleção</Btn>
-            </div>
-          ) : (
-            <div style={{ fontSize: 12.5, color: C.sub, lineHeight: 1.6, padding: 10 }}>
-              Clique num código (círculo) para ver todos os seus recortes, ou numa ligação (o número entre dois códigos)
-              para ver só os recortes em que os dois aparecem juntos.
-              {arestas.length > 0 && (
-                <div style={{ marginTop: 12 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: C.sub, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 4 }}>Ligações mais fortes</div>
-                  {arestas.slice(0, 6).map((a) => (
-                    <div key={a.a + a.b} onClick={() => setSel({ tipo: "aresta", a: a.a, b: a.b, n: a.n })} style={{ cursor: "pointer", fontSize: 12, padding: "3px 0" }}>
-                      <b>{a.n}×</b> {(codeMap[a.a] || {}).name} <span style={{ color: C.sub }}>+</span> {(codeMap[a.b] || {}).name}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
     </div>
   );
 }

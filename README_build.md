@@ -34,13 +34,11 @@ Saída: `Enlace.html` (~1,6 MB). É só abrir no navegador.
   entre as ferramentas). Exporta tudo num barrel no fim do arquivo.
 - `EditorTAR.jsx` — editor Ator-Rede. Uma única instância serve as duas vistas da
   sub-aba **Ator-Rede** via a prop `viewMode`: `analise` (Tabela) e `diagrama`.
-- `AnaliseQualitativa.jsx` — análise textual. Persiste em `window.storage`
-  (localStorage). Os métodos ficam na tabela `METHODS` (8 presets: livre, Bardin,
-  ATD, fenomenologia, discurso, grounded, narrativas, Bourdieu) — cada um só
-  troca terminologia, passos, abas visíveis e dicas; o motor é o mesmo. Quatro
-  abas são comuns a todos os métodos e registradas por código logo após
-  `METHOD_ORDER`: **Documentos** (`corpus`), **Consultas** (`recuperacao`),
-  **Rede** (`rede`) e **Memos** (`memos`).
+- `AnaliseQualitativa.jsx` — análise textual (análise livre: codificar,
+  categorizar e interpretar). Persiste em `window.storage` (localStorage). As
+  abas ficam em `ABAS`, na ordem em que aparecem: **Documentos** (`corpus`),
+  **Codificação**, **Categorias**, **Consultas** (`recuperacao`),
+  **Quantitativo** e **Metatexto**.
 
   O projeto é um **corpus**: `docs[]` (`{id, name, text, attrs, paginas}`),
   `docAtual`, `atributos[]`, e os recortes carregam `docId`. Projetos do formato
@@ -58,28 +56,16 @@ Saída: `Enlace.html` (~1,6 MB). É só abrir no navegador.
   **REFI-QDA**: `exportarREFI()`/`importarREFI()` leem e escrevem o QDA-XML 1.0
   (`.qde`/`.qdc`) — o formato que NVivo, MAXQDA e ATLAS.ti abrem.
 
-  **Memos** (`project.memos`): diário da análise, cada um podendo se vincular a
-  um código ou a um documento. Saem no relatório em PDF e no `.qde` como `<Note>`.
-
-  **Rede** (`RedeView`): grafo calculado da própria codificação — os nós são os
-  códigos (tamanho = nº de recortes) e as ligações são co-ocorrências no mesmo
-  recorte. `redeDoProjeto()` monta, `layoutRede()` posiciona (Fruchterman-Reingold
-  determinístico, sem `Math.random`, para o mesmo projeto render sempre o mesmo
-  desenho) e clicar num nó ou numa ligação lista as citações que a sustentam.
 - `RevisaoLiteratura.jsx` — janela **Revisão**: tabela de referências (importa
   `.csv` com cabeçalho, `.bib` e `.ris`; o BibTeX decodifica acento em LaTeX),
   detecção de duplicatas por DOI ou título+ano, e a etapa de cada referência.
   As contagens do diagrama saem dessas etapas — `contagens()` — e o desenho é
-  montado por `layoutDiagrama()`/`buildRevisaoInner()`. No modo `sistematica`
-  aparecem o protocolo e o fluxo PRISMA completo; no `narrativa`, um fluxo de
-  três passos. Cada caixa aceita sobrescrita manual de rótulo e número
-  (`state.over`), com botão para recalcular. Ponte `SUITE`
-  (`getRevisao`/`setRevisao`).
-- `CampoBourdieu.jsx` — janela **Campo (Bourdieu)**: propriedades do campo
-  (capital específico, illusio, doxa, polos) e agentes com os quatro capitais
-  (0–10). Deriva o espaço social — volume = soma dos capitais (eixo vertical),
-  composição = econômico − cultural (eixo horizontal) — e desenha trajetórias a
-  partir da posição anterior. Ponte `SUITE` (`getCampo`/`setCampo`).
+  montado por `layoutDiagrama()`/`buildRevisaoInner()`, sempre com o protocolo e
+  o fluxo PRISMA completo. Cada caixa do diagrama aceita sobrescrita manual de
+  rótulo e número (`state.over`), com botão para recalcular. As notas de cada
+  referência são caixas (`notas[]`, `{id, titulo, texto}`), quantas a pessoa
+  quiser; `migrarRevisao()`, chamada em todo ponto de carga, converte o formato
+  antigo (um texto só). Ponte `SUITE` (`getRevisao`/`setRevisao`).
 - `DiagramaGeral.jsx` — janela **Mapa conceitual**. Cada nó guarda forma
   (retângulo, arredondado, elipse, losango, hexágono), preenchimento, borda, cor
   do texto, fonte (família, corpo, negrito, itálico) e largura/altura fixas
@@ -101,17 +87,16 @@ Saída: `Enlace.html` (~1,6 MB). É só abrir no navegador.
 As janelas:
 
 ```
-Análise Qualitativa ─┬─ Texto            (codificação, 8 métodos, corpus + rede)
+Análise Qualitativa ─┬─ Texto            (codificação, corpus e consultas)
                      ├─ Revisão          (referências + fluxo PRISMA)
-                     ├─ Ator-Rede ──┬─ Tabela     mesma rede
-                     │              └─ Diagrama   (estado do EditorTAR)
-                     └─ Campo (Bourdieu)  (espaço social dos agentes)
+                     └─ Ator-Rede ──┬─ Tabela     mesma rede
+                                    └─ Diagrama   (estado do EditorTAR)
 Mapa conceitual        (diagrama livre, independente)
 Análise Quantitativa   (testes estatísticos, independente)
 ```
 
-O "Salvar Enlace…" (menu Arquivo) reúne os cinco estados num único `.json` pela
-ponte `SUITE`: `tar`, `qual`, `geral`, `campo` e `revisao`.
+O "Salvar Enlace…" (menu Arquivo) reúne os quatro estados num único `.json` pela
+ponte `SUITE`: `tar`, `qual`, `geral` e `revisao`.
 
 ## Como funciona o build
 O `build_enlace.mjs` faz o bundle de `src/main.jsx` com **esbuild** (resolve os
@@ -128,10 +113,9 @@ node testes/03-corpus.mjs   # uma suíte sozinha, com o detalhe de cada passo
 As suítes em `testes/` carregam o **arquivo único já construído** num DOM
 (jsdom) e clicam na interface como um usuário: trocam de aba, carregam os
 exemplos, importam arquivos, editam células e conferem os números que aparecem
-na tela. São 147 verificações cobrindo a estrutura das janelas, a revisão com
-PRISMA, o corpus de vários documentos, a ida e volta do REFI-QDA, os memos, a
-rede de códigos, a busca no corpus, o comportamento quando o navegador recusa
-gravar (`07-armazenamento.mjs` finge a cota estourando) e os 11 tipos de
+na tela. São 132 verificações cobrindo a estrutura das janelas, a revisão com
+PRISMA, o corpus de vários documentos, a ida e volta do REFI-QDA, a busca no
+corpus, o comportamento quando o navegador recusa gravar (`07-armazenamento.mjs` finge a cota estourando) e os 11 tipos de
 gráfico da janela quantitativa (`09-graficos.mjs`, caracterização feita para
 proteger a saída do recharts), a migração das chaves do nome antigo e as
 opções do mapa conceitual.

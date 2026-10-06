@@ -1,4 +1,4 @@
-// Testa a nova estrutura: TAR dentro da Qualitativa + janela Campo (Bourdieu).
+// Testa a estrutura: três janelas, com Texto, Revisão e Ator-Rede dentro da Qualitativa.
 import { readFileSync } from "node:fs";
 const jsdomMod = await import("jsdom");
 const { JSDOM, VirtualConsole } = jsdomMod.default ?? jsdomMod;
@@ -37,9 +37,9 @@ console.log("ABAS DO TOPO:", topo.join(" | "));
 ok(topo.join("|") === "Análise Qualitativa|Mapa conceitual|Análise Quantitativa", "três janelas, começando na Qualitativa");
 
 // 2) sub-abas da qualitativa
-const subs = ["Texto", "Ator-Rede", "Campo (Bourdieu)"].filter((t) => all(t).length);
+const subs = ["Texto", "Revisão", "Ator-Rede"].filter((t) => all(t).length);
 console.log("SUB-ABAS presentes:", subs.join(" | "));
-ok(subs.length === 3, "sub-abas Texto / Ator-Rede / Campo");
+ok(subs.length === 3 && !all("Campo (Bourdieu)").length, "sub-abas Texto / Revisão / Ator-Rede");
 
 // 3) Ator-Rede com alternador Tabela/Diagrama
 await click(nav("Ator-Rede"), 600);
@@ -50,49 +50,16 @@ console.log("  TAR diagrama ->", ptxt().slice(0, 70));
 ok(/Diagrama TAR/.test(ptxt()), "alterna para o diagrama da mesma rede");
 await click(nav("Tabela"), 500);
 
-// 4) Campo (Bourdieu)
-await click(nav("Campo (Bourdieu)"), 700);
-console.log("CAMPO ->", ptxt().slice(0, 120));
-const proj = pb(/^Projeto/); await click(proj, 300);
-const ex = pb(/Carregar exemplo/); await click(ex, 900);
-const painel = vis();
-const circles = painel.querySelectorAll("circle").length;
-const textos = painel.querySelectorAll("text").length;
-const linhas = painel.querySelectorAll("tbody tr").length;
-console.log(`  gráfico: ${circles} círculos, ${textos} textos | tabela: ${linhas} agentes`);
-ok(circles >= 8 && linhas === 8, "exemplo carregou 8 agentes e desenhou o espaço social");
-const t = ptxt();
-const mres = t.match(/volume médio ([\d,\.]+) \(de (\d+) a (\d+)\)/);
-console.log("  resumo:", mres ? mres[0] : "(não achado)");
-const mpolo = t.match(/Polo cultural: (\d+) · polo econômico: (\d+)/);
-console.log("  polos:", mpolo ? mpolo[0] : "(não achado)");
-ok(!!mres && !!mpolo, "resumo do espaço calculado");
-// selecionar um agente pelo chip e ver as proximidades
-const chip = [...painel.querySelectorAll("button")].find((b) => /Professor temporário/.test(b.textContent));
-if (chip) { await click(chip, 500); const t2 = ptxt(); const i = t2.indexOf("Posições próximas"); console.log("  " + t2.slice(i, i + 180)); ok(i > 0, "proximidades no espaço social"); }
-else ok(false, "chip do agente não encontrado");
-
-// 5) método de Bourdieu na análise de texto
+// 4) análise de texto: só a análise livre, com seis abas
 await click(nav("Texto"), 600);
-const sel = [...vis().querySelectorAll("select")].find((s) => [...s.options].some((o) => /Bardin/.test(o.textContent)));
-if (sel) {
-  const metodos = [...sel.options].map((o) => o.textContent.trim());
-  console.log("MÉTODOS (" + metodos.length + "):", metodos.join(" | "));
-  const opt = [...sel.options].find((o) => /Bourdieu/.test(o.textContent));
-  ok(!!opt, "método praxiológico (Bourdieu) disponível");
-  if (opt) {
-    Object.getOwnPropertyDescriptor(W.HTMLSelectElement.prototype, "value").set.call(sel, opt.value);
-    sel.dispatchEvent(new W.Event("change", { bubbles: true }));
-    await wait(600);
-    const exq = pb(/^Exemplo$/); if (exq) await click(exq, 900);
-    const tq = ptxt();
-    console.log("  abas do método:", (tq.match(/Indícios \(capital\/habitus\)|Categorias praxiológicas|Interpretação/g) || []).join(" · "));
-    ok(/Indícios \(capital\/habitus\)/.test(tq), "terminologia do método aplicada");
-    ok(/escolha do curso superior/i.test(tq), "exemplo bourdieusiano carregado");
-  }
-} else ok(false, "seletor de métodos não encontrado");
+const botoes = [...vis().querySelectorAll("button")].map((b) => b.textContent.trim());
+const abas = ["Documentos", "Codificação", "Categorias", "Consultas", "Quantitativo", "Metatexto"];
+console.log("ABAS DO TEXTO:", abas.filter((a) => botoes.includes(a)).join(" | "));
+ok(abas.every((a) => botoes.includes(a)), "abas Documentos / Codificação / Categorias / Consultas / Quantitativo / Metatexto");
+ok(!["Confiabilidade", "Rede", "Memos"].some((a) => botoes.includes(a)), "sem as abas Confiabilidade, Rede e Memos");
+ok(!/Método de análise/.test(ptxt()), "sem seletor de método");
 
-// 6) "Salvar Enlace" precisa levar junto o campo de Bourdieu
+// 5) "Salvar Enlace" reúne as ferramentas num único .json
 let capturado = null;
 W.URL.createObjectURL = (b) => { capturado = b; return "blob:teste"; };
 W.URL.revokeObjectURL = () => {};
@@ -105,7 +72,6 @@ if (salvar) {
   if (capturado) {
     const o = JSON.parse(await capturado.text());
     console.log("SALVAR ENLACE -> chaves:", Object.keys(o).join(", "));
-    ok(!!o.campo && Array.isArray(o.campo.agentes) && o.campo.agentes.length === 8, `o .json leva o campo (${o.campo && o.campo.agentes ? o.campo.agentes.length : 0} agentes)`);
     ok(!!o.tar && !!o.qual, "o .json continua levando TAR e texto");
   } else ok(false, "nada foi gerado ao salvar");
 } else ok(false, "item 'Salvar Enlace…' não encontrado");

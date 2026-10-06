@@ -1,4 +1,4 @@
-// Testa a Revisão de literatura: tabela, contagens, modos, diagrama e importação.
+// Testa a Revisão de literatura: tabela, contagens, diagrama, notas em caixas e importação.
 import { readFileSync } from "node:fs";
 const jsdomMod = await import("jsdom");
 const { JSDOM, VirtualConsole } = jsdomMod.default ?? jsdomMod;
@@ -29,6 +29,7 @@ const ptxt = () => vis().textContent.replace(/\s+/g, " ").trim();
 const ok = (c, m) => { console.log((c ? "  ok  " : "  FALHA ") + m); if (!c) process.exitCode = 1; };
 const setSel = (el, v) => { Object.getOwnPropertyDescriptor(W.HTMLSelectElement.prototype, "value").set.call(el, v); el.dispatchEvent(new W.Event("change", { bubbles: true })); };
 const setInp = (el, v) => { Object.getOwnPropertyDescriptor(W.HTMLInputElement.prototype, "value").set.call(el, v); el.dispatchEvent(new W.Event("input", { bubbles: true })); };
+const setTxt = (el, v) => { Object.getOwnPropertyDescriptor(W.HTMLTextAreaElement.prototype, "value").set.call(el, v); el.dispatchEvent(new W.Event("input", { bubbles: true })); };
 
 await click(nav("Pular"));
 ok(!!nav("Revisão"), "sub-aba Revisão existe");
@@ -82,14 +83,10 @@ if (selCaixa) {
   } else ok(false, "campo de número não encontrado");
 }
 
-// modo narrativa esconde protocolo e encurta o fluxo
-await click(nav("Narrativa"), 700);
-ok(!nav("Protocolo"), "modo narrativa esconde a aba Protocolo");
-const caixasN = vis().querySelectorAll("svg rect").length;
-console.log("  caixas no modo narrativa:", caixasN);
-ok(caixasN < caixas, "fluxo narrativo é mais curto que o PRISMA");
-await click(nav("Sistemática"), 700);
-ok(!!nav("Protocolo"), "modo sistemática traz o Protocolo de volta");
+// um fluxo só: sem alternador de modo, Protocolo sempre à mão
+ok(!nav("Narrativa") && !nav("Sistemática"), "sem alternador Narrativa/Sistemática");
+ok(!!nav("Protocolo"), "aba Protocolo sempre disponível");
+ok(!/sistem[aá]tica/i.test(ptxt()), "o termo 'sistemática' não aparece na janela");
 
 // duplicatas: desmarcar as duas e deixar o app reencontrá-las
 await click(nav("Referências"), 600);
@@ -132,6 +129,20 @@ ok(/Modelagem e STEM na escola/.test(valores), "título do .bib lido (chaves int
 ok(/Silva, Maria; Souza, João/.test(valores), "autores do .bib: 'and' virou ';' e o acento LaTeX virou letra");
 ok(/scopus/.test(valores), "base recebeu o nome do arquivo importado");
 
+// notas / extração de dados: quantas caixas a pessoa quiser
+const caixasNota = () => [...vis().querySelectorAll("textarea")].filter((x) => x.placeholder === "anotações");
+await click(vis().querySelector("tbody tr"), 500);
+ok(caixasNota().length === 1, "referência selecionada começa com uma caixa de notas");
+await click(pb(/^\+ Caixa$/), 400);
+await click(pb(/^\+ Caixa$/), 400);
+ok(caixasNota().length === 3, "+ Caixa acrescenta caixas (3 agora)");
+setTxt(caixasNota()[1], "amostra: 32 estudantes do 9º ano");
+await wait(400);
+ok(caixasNota()[1].value === "amostra: 32 estudantes do 9º ano", "cada caixa guarda o próprio texto");
+const remover = [...vis().querySelectorAll("button")].filter((b) => b.title === "remover esta caixa");
+await click(remover[2], 400);
+ok(caixasNota().length === 2 && caixasNota()[1].value === "amostra: 32 estudantes do 9º ano", "remover tira só a caixa escolhida");
+
 // salvar tudo leva a revisão
 let cap = null;
 W.URL.createObjectURL = (b) => { cap = b; return "blob:teste"; };
@@ -143,7 +154,19 @@ if (cap) {
   const o = JSON.parse(await cap.text());
   console.log("SALVAR ENLACE -> chaves:", Object.keys(o).join(", "));
   ok(!!o.revisao && o.revisao.refs.length === 16, `o .json leva a revisão (${o.revisao ? o.revisao.refs.length : 0} referências)`);
+  ok(o.revisao.refs[0].notas.length === 2 && o.revisao.refs[0].notas[1].texto === "amostra: 32 estudantes do 9º ano", "as caixas de notas vão junto no .json");
 } else ok(false, "nada gerado ao salvar");
+
+// arquivo salvo no formato antigo: notas num texto só e modo narrativa
+const antigo = { modo: "narrativa", protocolo: { pergunta: "pergunta antiga" }, over: {},
+  refs: [{ id: "r1", autores: "Souza, A.", ano: "2020", titulo: "Estudo antigo", veiculo: "", base: "", tipo: "artigo", doi: "", link: "", resumo: "", notas: "anotação antiga", tags: "", etapa: "incluido", motivo: "" }] };
+const jInput = [...vis().querySelectorAll('input[type="file"]')][1];
+Object.defineProperty(jInput, "files", { value: [new W.File([JSON.stringify(antigo)], "revisao.json", { type: "application/json" })], configurable: true });
+jInput.dispatchEvent(new W.Event("change", { bubbles: true }));
+await wait(1000);
+ok(/identificados: 1(?!\d)/.test(ptxt()) && /avaliados: 1(?!\d)/.test(ptxt()) && !!nav("Protocolo"), "arquivo antigo abre com o fluxo completo");
+await click(vis().querySelector("tbody tr"), 500);
+ok(caixasNota().length === 1 && caixasNota()[0].value === "anotação antiga", "a nota antiga virou a primeira caixa");
 
 const eb = doc.getElementById("errbox");
 if (W.getComputedStyle(eb).display !== "none" && eb.textContent.trim()) console.log("\n!! ERRO EM TELA:", eb.textContent.slice(0, 400));

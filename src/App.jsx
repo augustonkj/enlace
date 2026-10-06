@@ -4,23 +4,21 @@ import { EditorTAR } from "./EditorTAR.jsx";
 import { AnaliseQualitativa } from "./AnaliseQualitativa.jsx";
 import { AnaliseQuantitativa } from "./AnaliseQuantitativa.jsx";
 import { DiagramaGeral } from "./DiagramaGeral.jsx";
-import { CampoBourdieu } from "./CampoBourdieu.jsx";
 import { RevisaoLiteratura } from "./RevisaoLiteratura.jsx";
 
 /* ===== Casca: seletor de ferramentas ===== */
 const TOURQ = [
-  { t: "Bem-vindo ao Enlace", b: "O Enlace reúne três janelas: Análise Qualitativa (que abriga a análise de texto, a Teoria Ator-Rede e o Campo de Bourdieu), Mapa conceitual e Análise Quantitativa. Tudo começa em branco; cada ferramenta tem um botão Exemplo (no menu Projeto) se você quiser ver um modelo pronto." },
-  { t: "Texto", b: "A primeira sub-aba da Análise Qualitativa: cole ou abra um texto, selecione trechos e aplique códigos, agrupe em categorias e escreva o metatexto. São oito métodos — de Bardin e ATD à análise praxiológica de Bourdieu —, e trocar de método muda a terminologia, não os seus dados.", tool: "qual", sub: "texto" },
-  { t: "Revisão de literatura", b: "A segunda sub-aba: monte a tabela de referências (à mão ou importando .csv, .bib ou .ris das bases), marque as duplicatas e defina a etapa de cada uma. O diagrama do fluxo — quantos foram identificados, quantos saíram e por quê, quantos entraram — é desenhado a partir dessa tabela, e o botão Sistemática acrescenta o protocolo e o formato PRISMA completo.", tool: "qual", sub: "revisao" },
+  { t: "Bem-vindo ao Enlace", b: "O Enlace reúne três janelas: Análise Qualitativa (que abriga a análise de texto, a revisão de literatura e a Teoria Ator-Rede), Mapa conceitual e Análise Quantitativa. Tudo começa em branco; cada ferramenta tem um botão Exemplo (no menu Projeto) se você quiser ver um modelo pronto." },
+  { t: "Texto", b: "A primeira sub-aba da Análise Qualitativa: cole ou abra um texto, selecione trechos e aplique códigos, agrupe em categorias e escreva o metatexto.", tool: "qual", sub: "texto" },
+  { t: "Revisão de literatura", b: "A segunda sub-aba: monte a tabela de referências (à mão ou importando .csv, .bib ou .ris das bases), marque as duplicatas e defina a etapa de cada uma. O diagrama do fluxo — quantos foram identificados, quantos saíram e por quê, quantos entraram — é desenhado a partir dessa tabela, no formato PRISMA, e a aba Protocolo registra a pergunta, as bases e os critérios.", tool: "qual", sub: "revisao" },
   { t: "Ator-Rede", b: "A terceira sub-aba: cadastre os actantes e as associações da Teoria Ator-Rede em tabelas e alterne, ali mesmo, entre Tabela e Diagrama — são a mesma rede vista de dois jeitos.", tool: "qual", sub: "tar" },
-  { t: "Campo (Bourdieu)", b: "A quarta sub-aba: descreva o campo (capital em disputa, illusio, doxa, polos) e dê a cada agente os quatro capitais. O gráfico posiciona todo mundo no espaço social — volume de capital na vertical, composição (econômico × cultural) na horizontal — e desenha trajetórias.", tool: "qual", sub: "campo" },
   { t: "Mapa conceitual", b: "Um mapa conceitual livre, sem as regras da Teoria Ator-Rede: nós e ligações rotuladas, para organizar ideias.", tool: "diag" },
   { t: "Análise Quantitativa", b: "Espaço dedicado aos testes estatísticos, independente das outras janelas.", tool: "quant" },
 ];
-const QUAL_SUBS = [["texto", "Texto"], ["revisao", "Revisão"], ["tar", "Ator-Rede"], ["campo", "Campo (Bourdieu)"]];
+const QUAL_SUBS = [["texto", "Texto"], ["revisao", "Revisão"], ["tar", "Ator-Rede"]];
 export default function App() {
   const [tool, setTool] = useState("qual");
-  const [qualSub, setQualSub] = useState("texto"); // sub-aba da Qualitativa: "texto" | "tar" | "campo"
+  const [qualSub, setQualSub] = useState("texto"); // sub-aba da Qualitativa: "texto" | "revisao" | "tar"
   const [tarView, setTarView] = useState("analise"); // dentro de Ator-Rede: "analise" (tabela) | "diagrama"
   const [tourQ, setTourQ] = useState(-1);
   const tabs = [["qual", "Análise Qualitativa"], ["diag", "Mapa conceitual"], ["quant", "Análise Quantitativa"]];
@@ -45,9 +43,8 @@ export default function App() {
       const tar = SUITE.getTar ? SUITE.getTar() : null;
       const qual = SUITE.getQual ? await SUITE.getQual() : null;
       const geral = SUITE.getGeral ? SUITE.getGeral() : null;
-      const campo = SUITE.getCampo ? SUITE.getCampo() : null;
       const revisao = SUITE.getRevisao ? SUITE.getRevisao() : null;
-      const payload = { __enlace: 1, savedAt: new Date().toISOString(), tar, qual, geral, campo, revisao };
+      const payload = { __enlace: 1, savedAt: new Date().toISOString(), tar, qual, geral, revisao };
       const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
       const u = URL.createObjectURL(blob); const a = document.createElement("a");
       a.href = u; a.download = `enlace-${new Date().toISOString().slice(0, 10)}.json`; a.click();
@@ -66,7 +63,6 @@ export default function App() {
         if (o.tar && SUITE.setTar) SUITE.setTar(o.tar);
         if (o.qual && SUITE.setQual) await SUITE.setQual(o.qual);
         if (o.geral && SUITE.setGeral) SUITE.setGeral(o.geral);
-        if (o.campo && SUITE.setCampo) SUITE.setCampo(o.campo);
         if (o.revisao && SUITE.setRevisao) SUITE.setRevisao(o.revisao);
         setMsg("projeto do Enlace restaurado"); setTimeout(() => setMsg(""), 2500);
       } catch (e) { setMsg("não foi possível abrir o arquivo"); setTimeout(() => setMsg(""), 3000); }
@@ -134,7 +130,6 @@ export default function App() {
         <div style={{ display: tool === "diag" ? "block" : "none", height: "100%" }}><DiagramaGeral active={tool === "diag"} /></div>
         <div style={{ display: tool === "qual" && qualSub === "texto" ? "block" : "none", height: "100%" }}><AnaliseQualitativa /></div>
         <div style={{ display: tool === "qual" && qualSub === "revisao" ? "block" : "none", height: "100%" }}><RevisaoLiteratura active={tool === "qual" && qualSub === "revisao"} /></div>
-        <div style={{ display: tool === "qual" && qualSub === "campo" ? "block" : "none", height: "100%" }}><CampoBourdieu active={tool === "qual" && qualSub === "campo"} /></div>
         <div style={{ display: tool === "quant" ? "block" : "none", height: "100%" }}><AnaliseQuantitativa active={tool === "quant"} /></div>
       </div>
       {tourQ >= 0 && TOURQ[tourQ] && (
@@ -178,7 +173,7 @@ export default function App() {
 
             <h3 style={{ margin: "0 0 6px", fontSize: 13, color: "#1f7a8c", textTransform: "uppercase", letterSpacing: ".5px" }}>Sobre o software</h3>
             <p style={{ margin: "0 0 10px", fontSize: 13.5, color: "#46555f", lineHeight: 1.6 }}>
-              O Enlace reúne três janelas para pesquisa qualitativa e quantitativa. A Análise Qualitativa abriga quatro ferramentas: Texto (codificação em códigos e categorias, em oito métodos), Revisão (tabela de referências e diagrama do fluxo da seleção, no formato PRISMA quando sistemática), Ator-Rede (a rede de actantes da Teoria Ator-Rede, em tabela e em diagrama) e Campo (o espaço social de Bourdieu, por volume e estrutura do capital). Ao lado ficam o Mapa conceitual e a Análise Quantitativa (testes estatísticos).
+              O Enlace reúne três janelas para pesquisa qualitativa e quantitativa. A Análise Qualitativa abriga três ferramentas: Texto (codificação em códigos e categorias), Revisão (tabela de referências e diagrama do fluxo da seleção, no formato PRISMA) e Ator-Rede (a rede de actantes da Teoria Ator-Rede, em tabela e em diagrama). Ao lado ficam o Mapa conceitual e a Análise Quantitativa (testes estatísticos).
             </p>
             <p style={{ margin: "0 0 10px", fontSize: 13.5, color: "#46555f", lineHeight: 1.6 }}>
               Funciona offline, no navegador ou como aplicativo de desktop, e o trabalho é salvo num único arquivo.
