@@ -1090,9 +1090,10 @@ function useMarcarAlterado(valor) {
    menos de `agruparMs` (digitar uma palavra, arrastar) viram um passo só.
    Quando `chave` muda (trocou de projeto), o histórico recomeça.
 
-   useAtalhosDesfazer liga Ctrl/⌘+Z, Ctrl/⌘+Shift+Z e Ctrl+Y à janela visível.
-   Dentro de um campo de texto o atalho fica com o navegador, que desfaz a
-   digitação letra a letra; fora dele, desfaz a última ação da janela.
+   useAtalhosDesfazer liga Ctrl/⌘+Z, Ctrl/⌘+Shift+Z e Ctrl/⌘+Y à janela visível,
+   inclusive dentro de campos de texto. O atalho NUNCA pode escapar para o
+   navegador: no Safari, ⌘Z sem nada para desfazer vira "Desfazer Fechar Aba"
+   e reabre uma aba fechada do Enlace — em branco, já que nada fica salvo.
    ============================================================ */
 function useHistorico(valor, definir, { chave, limite = 80, agruparMs = 600 } = {}) {
   const passado = useRef([]), futuro = useRef([]);
@@ -1145,7 +1146,6 @@ function useAtalhosDesfazer(ativo, desfazer, refazer) {
       if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
       const k = (e.key || "").toLowerCase();
       if (k !== "z" && k !== "y") return;
-      if (emCampoDeTexto(document.activeElement)) return;
       e.preventDefault();
       if (k === "y" || e.shiftKey) refazer(); else desfazer();
     };

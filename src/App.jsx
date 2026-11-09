@@ -35,6 +35,15 @@ export default function App() {
     window.addEventListener("beforeunload", h);
     return () => window.removeEventListener("beforeunload", h);
   }, []);
+  // rede de segurança: Ctrl/⌘+Z, ⌘+Shift+Z e ⌘+Y nunca chegam ao navegador.
+  // No Safari, ⌘Z sem nada para desfazer reabre a última aba fechada — um
+  // Enlace em branco, já que nada fica salvo no navegador. Cada janela trata
+  // o atalho com o próprio histórico; aqui só se impede o comportamento do navegador.
+  useEffect(() => {
+    const h = (e) => { if ((e.ctrlKey || e.metaKey) && !e.altKey && /^[zy]$/i.test(e.key || "")) e.preventDefault(); };
+    window.addEventListener("keydown", h, true);
+    return () => window.removeEventListener("keydown", h, true);
+  }, []);
   useEffect(() => { if (tourQ < 0) return; const st = TOURQ[tourQ]; if (!st) return; if (st.tool && tool !== st.tool) setTool(st.tool); if (st.sub) setQualSub(st.sub); }, [tourQ]);
   const miniBtn = { border: "1px solid #cfd6dd", background: "#fff", color: "#46555f", borderRadius: 6, padding: "6px 12px", fontSize: 12.5, cursor: "pointer", fontWeight: 600 };
   const primaryBtn = { border: "none", background: "#1f7a8c", color: "#fff", borderRadius: 6, padding: "6px 14px", fontSize: 12.5, cursor: "pointer", fontWeight: 600 };

@@ -35,12 +35,22 @@ await click(nav("Texto"), 900);
 const nomeProj = () => [...vis().querySelectorAll("input")].find((i) => i.style.width === "130px");
 const original = nomeProj().value;
 await digitar(nomeProj(), "Projeto renomeado");
+// com o foco no próprio campo, o Enlace desfaz — o atalho não pode ir para o
+// navegador (no Safari, ⌘Z solto reabre uma aba fechada, em branco)
 nomeProj().focus();
-await tecla("z");
-ok(nomeProj().value === "Projeto renomeado", "Texto: com o foco no campo, Ctrl+Z fica com o navegador");
+const ev = new W.KeyboardEvent("keydown", { key: "z", metaKey: true, bubbles: true, cancelable: true });
+W.dispatchEvent(ev); await wait(400);
+ok(ev.defaultPrevented, "⌘Z num campo de texto não chega ao navegador");
+ok(nomeProj().value === original, "Texto: ⌘Z com o foco no campo desfaz");
+await tecla("z", { shift: true });
+ok(nomeProj().value === "Projeto renomeado", "Texto: Ctrl+Shift+Z refaz");
 tirarFoco();
 await tecla("z");
-ok(nomeProj().value === original, "Texto: Ctrl+Z desfaz");
+ok(nomeProj().value === original, "Texto: Ctrl+Z fora do campo desfaz");
+// sem nada para desfazer, o atalho também fica retido
+const ev2 = new W.KeyboardEvent("keydown", { key: "z", metaKey: true, bubbles: true, cancelable: true });
+W.dispatchEvent(ev2); await wait(300);
+ok(ev2.defaultPrevented, "⌘Z sem nada para desfazer também não chega ao navegador");
 await tecla("z", { shift: true });
 ok(nomeProj().value === "Projeto renomeado", "Texto: Ctrl+Shift+Z refaz");
 await tecla("z", { meta: true });

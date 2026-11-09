@@ -518,10 +518,11 @@ table.cent{border-collapse:collapse;width:100%;font-size:12px} table.cent th{tex
   useEffect(() => {
     if (!active) return;
     const h = (e) => {
+      // desfazer/refazer valem também dentro dos campos (no Safari, ⌘Z solto reabre aba fechada)
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") { e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "y") { e.preventDefault(); redo(); return; }
       const tag = document.activeElement?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA") return;
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") { e.preventDefault(); if (e.shiftKey) redo(); else undo(); }
-      else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "y") { e.preventDefault(); redo(); }
       else if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); deleteSelected(); }
       else if (e.key === "Escape") { setConnectFrom(null); setMode("select"); setSelNodes([]); setSelEdge(null); setSelRegion(null); }
       else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "a") { e.preventDefault(); setSelNodes(state.nodes.map((n) => n.id)); setSelEdge(null); }
