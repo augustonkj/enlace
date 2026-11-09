@@ -150,11 +150,27 @@ function migrarProjeto(p) {
    carregado sob demanda, da CDN, só quando um .pdf é escolhido: o app segue
    leve e offline para .txt/.docx, e ler PDF pede internet naquele momento.
    Roda SEM Worker: o módulo do worker é pendurado em globalThis.pdfjsWorker,
-   o gancho de "fake worker" da própria biblioteca (funciona em file://). */
-const PDFJS_CDN = "https://cdn.jsdelivr.net/npm/pdfjs-dist@6.2.108/build/";
+   o gancho de "fake worker" da própria biblioteca (funciona em file://).
+   Usa o build "legacy": o moderno chama APIs recentes demais (Math.sumPrecise,
+   Map.getOrInsertComputed...) e quebra no Safari com um TypeError. */
+const PDFJS_RAIZ = "https://cdn.jsdelivr.net/npm/pdfjs-dist@6.2.108/";
+const PDFJS_CDN = PDFJS_RAIZ + "legacy/build/";
 let _pdfjs = null;
+// o Safari não deixa percorrer um ReadableStream com "for await", e o
+// getTextContent() do pdf.js faz exatamente isso: sem este suporte, todo PDF falha
+function streamIteravel() {
+  const RS = typeof ReadableStream !== "undefined" && ReadableStream.prototype;
+  if (!RS || RS[Symbol.asyncIterator]) return;
+  RS[Symbol.asyncIterator] = async function* () {
+    const leitor = this.getReader();
+    try {
+      for (;;) { const { done, value } = await leitor.read(); if (done) return; yield value; }
+    } finally { leitor.releaseLock(); }
+  };
+}
 function carregarPdfjs() {
   if (!_pdfjs) {
+    streamIteravel();
     const importar = (u) => import(/* webpackIgnore: true */ u);
     _pdfjs = Promise.all([importar(PDFJS_CDN + "pdf.min.mjs"), importar(PDFJS_CDN + "pdf.worker.min.mjs")])
       .then(([lib, worker]) => {
@@ -175,17 +191,29 @@ async function textoDePDF(buffer, nome) {
     return { text: "", paginas: null };
   }
   try {
-    const pdf = await lib.getDocument({ data: new Uint8Array(buffer), isEvalSupported: false, useSystemFonts: false }).promise;
+    const pdf = await lib.getDocument({
+      data: new Uint8Array(buffer), isEvalSupported: false, useSystemFonts: false,
+      // fontes padrão e CMaps: sem eles, PDFs com fontes não embutidas ou asiáticas saem sem texto
+      standardFontDataUrl: PDFJS_RAIZ + "standard_fonts/", cMapUrl: PDFJS_RAIZ + "cmaps/", cMapPacked: true,
+    }).promise;
     const partes = [], paginas = [];
     let pos = 0;
     for (let i = 1; i <= pdf.numPages; i++) {
       const pg = await pdf.getPage(i);
       const cont = await pg.getTextContent();
-      let t = "";
+      // o PDF quebra uma linha em vários pedaços (às vezes um por sílaba): só
+      // entra espaço quando há distância real entre o fim de um e o início do outro
+      let t = "", ant = null;
       cont.items.forEach((it) => {
-        t += it.str || "";
-        if (it.hasEOL) t += "\n";
-        else if (it.str && !/\s$/.test(it.str)) t += " ";
+        const str = it.str || "", tr = it.transform || [1, 0, 0, 1, 0, 0];
+        const x = tr[4], y = tr[5], corpo = Math.hypot(tr[2], tr[3]) || 10;
+        if (str && ant && !/\s$/.test(t) && !/^\s/.test(str)) {
+          const outraLinha = Math.abs(y - ant.y) > corpo * 0.5;
+          if (outraLinha || x - ant.fim > corpo * 0.15) t += " ";
+        }
+        t += str;
+        if (str) ant = { y, fim: x + (it.width || 0) };
+        if (it.hasEOL) { t += "\n"; ant = null; }
       });
       const bloco = t.replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim() + "\n\n";
       paginas.push({ n: i, inicio: pos, fim: pos + bloco.length });
@@ -195,8 +223,12 @@ async function textoDePDF(buffer, nome) {
     if (!text.trim()) { try { window.alert(`"${nome}" não tem texto selecionável — parece digitalizado (imagem). Passe um OCR antes de importar.`); } catch {} }
     return { text, paginas };
   } catch (e) {
-    try { console.error("PDF:", (e && (e.message || e.name)) || e); } catch {}
-    try { window.alert(`Não foi possível ler o PDF "${nome}". Se ele estiver protegido por senha ou corrompido, não há como extrair o texto.`); } catch {}
+    try { console.error("PDF:", e); } catch {}
+    const tipo = e && e.name;
+    const msg = tipo === "PasswordException" ? `"${nome}" está protegido por senha. Remova a senha (ex.: abra e salve de novo como PDF) e importe outra vez.`
+      : tipo === "InvalidPDFException" ? `"${nome}" não parece ser um PDF válido (arquivo corrompido ou incompleto).`
+      : `Não foi possível ler o PDF "${nome}".\n\nDetalhe técnico: ${(e && (e.message || tipo)) || e}`;
+    try { window.alert(msg); } catch {}
     return { text: "", paginas: null };
   }
 }

@@ -48,7 +48,8 @@ Saída: `Enlace.html` (~1,6 MB). É só abrir no navegador.
 
   **PDF**: o pdf.js **não** é embutido (sozinho levaria o bundle de ~1,6 MB
   para ~3,3 MB). `carregarPdfjs()` o importa sob demanda da jsDelivr
-  (`pdfjs-dist@6.2.108`, versão fixa) só quando um `.pdf` é escolhido, e roda
+  (`pdfjs-dist@6.2.108`, versão fixa, build `legacy` — o moderno quebra no
+  Safari por usar APIs como `Math.sumPrecise`) só quando um `.pdf` é escolhido, e roda
   sem Worker pelo gancho `globalThis.pdfjsWorker`, para funcionar em `file://`.
   Ler PDF, portanto, pede internet no momento da importação; o resto do app
   segue offline. `textoDePDF()` devolve o texto e o mapa de páginas
