@@ -243,7 +243,7 @@ function DiagramaGeral({ active = true }) {
 
   useEffect(() => {
     SUITE.getGeral = () => stateRef.current;
-    SUITE.setGeral = (data) => { if (data && Array.isArray(data.nodes)) { setStateRaw({ nodes: data.nodes, edges: data.edges || [] }); setSels([]); setSelEdge(null); } };
+    SUITE.setGeral = (data) => { if (data && Array.isArray(data.nodes)) { pushHist(); setStateRaw({ nodes: data.nodes, edges: data.edges || [] }); setSels([]); setSelEdge(null); } }; // pushHist: diagrama anterior recuperável com Ctrl+Z
     return () => { SUITE.getGeral = null; SUITE.setGeral = null; };
   }, []);
   useEffect(() => {
@@ -348,6 +348,10 @@ function DiagramaGeral({ active = true }) {
   // aplica um patch a TODOS os nós selecionados
   const setNos = (patch) => mut((s) => ({ ...s, nodes: s.nodes.map((n) => (sels.includes(n.id) ? { ...noCompleto(n), ...patch } : n)) }));
   const setLig = (patch) => mut((s) => ({ ...s, edges: s.edges.map((e) => (e.id === selEdge ? { ...ligCompleta(e), ...patch } : e)) }));
+  // versões SEM histórico p/ edição contínua (digitar, arrastar o seletor de cor ou a espessura):
+  // o snapshot ocorre uma vez no onFocus, senão o Ctrl+Z grava 1 entrada por caractere.
+  const setNosRaw = (patch) => setStateRaw((s) => ({ ...s, nodes: s.nodes.map((n) => (sels.includes(n.id) ? { ...noCompleto(n), ...patch } : n)) }));
+  const setLigRaw = (patch) => setStateRaw((s) => ({ ...s, edges: s.edges.map((e) => (e.id === selEdge ? { ...ligCompleta(e), ...patch } : e)) }));
   const aplicarAlinhar = (como) => mut((s) => ({ ...s, nodes: alinhar(s.nodes, sels, como) }));
   const aplicarDistribuir = (eixo) => mut((s) => ({ ...s, nodes: distribuir(s.nodes, sels, eixo) }));
   const aplicarCamada = (onde) => mut((s) => ({ ...s, nodes: onde === "frente" ? paraFrente(s.nodes, sels) : paraTras(s.nodes, sels) }));
@@ -380,13 +384,13 @@ function DiagramaGeral({ active = true }) {
   const selNodes = state.nodes.filter((n) => sels.includes(n.id));
   const ref = selNodes.length ? noCompleto(selNodes[0]) : null;   // o primeiro manda nos controles
   const selEdgeObj = selEdge ? ligCompleta(state.edges.find((e) => e.id === selEdge) || {}) : null;
-  const Paleta = ({ valor, aoEscolher }) => (
+  const Paleta = ({ valor, aoEscolher, aoArrastar = aoEscolher }) => (
     <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
       {CORES.map((c) => (
         <button key={c} onClick={() => aoEscolher(c)} title={c}
           style={{ width: 24, height: 20, borderRadius: 4, border: valor === c ? "2px solid #1f7a8c" : "1px solid #cfd6dd", background: c, cursor: "pointer" }} />
       ))}
-      <input type="color" value={valor || "#ffffff"} onChange={(e) => aoEscolher(e.target.value)} title="cor personalizada"
+      <input type="color" value={valor || "#ffffff"} onFocus={pushHist} onChange={(e) => aoArrastar(e.target.value)} title="cor personalizada"
         style={{ width: 26, height: 20, padding: 0, border: "1px solid #cfd6dd", borderRadius: 4, background: "none", cursor: "pointer" }} />
     </div>
   );
@@ -509,7 +513,7 @@ function DiagramaGeral({ active = true }) {
               {sels.length === 1 && (<>
                 <label style={lbl}>Texto</label>
                 <textarea style={{ ...inp, minHeight: 56, resize: "vertical" }} value={selNodes[0].text || ""}
-                  onChange={(e) => setNos({ text: e.target.value })} />
+                  onFocus={pushHist} onChange={(e) => setNosRaw({ text: e.target.value })} />
               </>)}
 
               <label style={lbl}>Forma</label>
@@ -521,11 +525,11 @@ function DiagramaGeral({ active = true }) {
               </div>
 
               <label style={lbl}>Preenchimento</label>
-              <Paleta valor={ref.color} aoEscolher={(c) => setNos({ color: c })} />
+              <Paleta valor={ref.color} aoEscolher={(c) => setNos({ color: c })} aoArrastar={(c) => setNosRaw({ color: c })} />
               <label style={lbl}>Borda</label>
-              <Paleta valor={ref.stroke} aoEscolher={(c) => setNos({ stroke: c })} />
+              <Paleta valor={ref.stroke} aoEscolher={(c) => setNos({ stroke: c })} aoArrastar={(c) => setNosRaw({ stroke: c })} />
               <label style={lbl}>Cor do texto</label>
-              <Paleta valor={ref.textColor} aoEscolher={(c) => setNos({ textColor: c })} />
+              <Paleta valor={ref.textColor} aoEscolher={(c) => setNos({ textColor: c })} aoArrastar={(c) => setNosRaw({ textColor: c })} />
 
               <label style={lbl}>Fonte</label>
               <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
@@ -553,9 +557,9 @@ function DiagramaGeral({ active = true }) {
             <div>
               <div style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.4, color: "#5a6b7a" }}>Ligação selecionada</div>
               <label style={lbl}>Rótulo</label>
-              <input style={inp} value={selEdgeObj.text || ""} onChange={(e) => setLig({ text: e.target.value })} placeholder="ex.: leva a, causa, inclui…" />
+              <input style={inp} value={selEdgeObj.text || ""} onFocus={pushHist} onChange={(e) => setLigRaw({ text: e.target.value })} placeholder="ex.: leva a, causa, inclui…" />
               <label style={lbl}>Cor</label>
-              <Paleta valor={selEdgeObj.color} aoEscolher={(c) => setLig({ color: c })} />
+              <Paleta valor={selEdgeObj.color} aoEscolher={(c) => setLig({ color: c })} aoArrastar={(c) => setLigRaw({ color: c })} />
               <label style={lbl}>Traçado</label>
               <div style={{ display: "flex", gap: 5 }}>
                 {[["reta", "╱", "reta"], ["curva", "⌒", "curva"], ["cotovelo", "⌐", "em cotovelo (ângulos retos)"]].map(([k, ic, t2]) => (
@@ -571,7 +575,7 @@ function DiagramaGeral({ active = true }) {
                 ))}
               </div>
               <label style={lbl}>Espessura</label>
-              <input type="range" min="1" max="6" step="0.5" value={selEdgeObj.width} onChange={(e) => setLig({ width: +e.target.value })} style={{ width: "100%" }} />
+              <input type="range" min="1" max="6" step="0.5" value={selEdgeObj.width} onFocus={pushHist} onChange={(e) => setLigRaw({ width: +e.target.value })} style={{ width: "100%" }} />
               <label style={{ ...lbl, display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
                 <input type="checkbox" checked={!!selEdgeObj.dash} onChange={(e) => setLig({ dash: e.target.checked })} /> tracejada
               </label>

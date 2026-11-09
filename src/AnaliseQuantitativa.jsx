@@ -10,9 +10,8 @@ function boxStats(a) {
   return { q1, med, q3, lo, hi, min: v[0], max: v[n - 1] };
 }
 import * as ST from "./stats.js";
-import { salvarLocal, AvisoArmazenamento, migrarChaveAntiga } from "./lib.js";
+import { salvarLocal, AvisoArmazenamento, migrarChaveAntiga, SUITE } from "./lib.js";
 
-const CHART_COLORS = ["#1f7a8c", "#7a5ea8", "#2e7d4f", "#b06a1f", "#c0392b", "#16a085"];
 const PALETTES = {
   "Padrão": ["#1f7a8c", "#7a5ea8", "#2e7d4f", "#b06a1f", "#c0392b", "#16a085"],
   "Vivo": ["#1971c2", "#2f9e44", "#e8590c", "#9c36b5", "#e03131", "#0c8599"],
@@ -20,6 +19,9 @@ const PALETTES = {
   "Azuis": ["#0b4f8a", "#1565c0", "#1f7ad6", "#4c9bf0", "#7bb8f7", "#a8d1fb"],
   "Cinzas": ["#343a40", "#495057", "#6c757d", "#909aa3", "#adb5bd", "#ced4da"],
 };
+const CHART_COLORS = PALETTES["Padrão"];
+// p → asteriscos de significância (usado no gráfico, no pós-hoc e no resultado)
+const stars = (p) => (p < 0.001 ? "***" : p < 0.01 ? "**" : p < 0.05 ? "*" : "n.s.");
 function histogram(x, nbins = 8) {
   if (x.length < 2) return [];
   const min = Math.min(...x), max = Math.max(...x); if (max === min) return [{ label: String(min), n: x.length }];
@@ -57,6 +59,7 @@ const TESTS = [
   ] },
   { group: "Não-paramétricos", items: [
     { key: "mw", label: "Mann-Whitney U (2 amostras independentes)", impl: true, kind: "num+group" },
+    { key: "kw", label: "Kruskal-Wallis (k amostras independentes)", impl: true, kind: "num+group" },
     { key: "wilcoxon", label: "Wilcoxon (2 amostras relacionadas)", impl: true, kind: "2num" },
     { key: "chi2", label: "Qui-quadrado (independência)", impl: true, kind: "2cat" },
     { key: "runs", label: "Teste de aleatoriedade (runs / Wald-Wolfowitz)", impl: true, kind: "1num" },
@@ -95,18 +98,6 @@ function parseDelim(text, delim) {
   }
   if (field.length || row.length) pushR();
   return rows.filter((r) => r.length && !(r.length === 1 && r[0].trim() === ""));
-}
-function parseTable(text) {
-  const firstLine = String(text).split(/\r?\n/)[0] || "";
-  const rows = parseDelim(text, detectDelim(firstLine));
-  if (!rows.length) return null;
-  const headers = rows[0].map((h, i) => (String(h).trim() || `col${i + 1}`));
-  const body = rows.slice(1);
-  const cols = {};
-  headers.forEach((h, j) => { cols[h] = body.map((r) => (r[j] != null ? r[j] : "")); });
-  const numeric = {};
-  headers.forEach((h) => { const vals = cols[h].filter((v) => String(v).trim() !== ""); const ok = vals.filter((v) => Number.isFinite(parseFloat(String(v).replace(",", ".")))).length; numeric[h] = vals.length > 0 && ok / vals.length >= 0.8; });
-  return { headers, rows: body, cols, numeric, n: body.length };
 }
 
 const T = {
@@ -256,6 +247,12 @@ const INFO = {
     leg: "Tabela: acima vs. ≤ mediana global, por grupo; gl = nº de grupos − 1.",
     r: "Siegel (1956).",
   },
+  kw: {
+    e: "Versão não-paramétrica da ANOVA de um fator: compara a tendência central de três ou mais grupos independentes pelos postos dos dados, sem exigir normalidade. Indica se há diferença geral, mas não diz qual grupo difere.",
+    f: [M(mi("H") + EQ + frac(mn("12"), mi("N") + par(mi("N") + PL + mn("1"))) + CD + SUM + frac(sq2(sb(mi("R"), mi("j"))), sb(mi("n"), mi("j"))) + MI_ + mn("3") + par(mi("N") + PL + mn("1")))],
+    leg: "R_j = soma dos postos do grupo j; n_j = tamanho do grupo j; N = total; gl = k − 1. Corrigido para empates.",
+    r: "Kruskal & Wallis (1952).",
+  },
   ks2: {
     e: "Verifica se duas amostras vêm da mesma distribuição, pela maior distância entre suas distribuições acumuladas. A forma bilateral é sensível a diferenças de qualquer tipo (posição, dispersão, forma).",
     f: [M(mi("D") + EQ + mt("máx") + mo("|") + sb(mi("F"), mn("1")) + par(mi("x")) + MI_ + sb(mi("F"), mn("2")) + par(mi("x")) + mo("|"))],
@@ -299,6 +296,7 @@ const WHEN = {
   chi2: "Para verificar associação entre duas variáveis categóricas (ex.: sexo × preferência).",
   fisher: "Como o qui-quadrado, mas para tabelas 2×2 com poucos casos.",
   median: "Para comparar a tendência central de 2+ grupos contando acima/abaixo da mediana.",
+  kw: "Para comparar a tendência central de 3+ grupos independentes quando a normalidade não vale (alternativa não-paramétrica à ANOVA).",
   ks2: "Para verificar se duas amostras vêm da mesma distribuição (posição, dispersão, forma).",
   ww2: "Para verificar se duas amostras diferem em qualquer aspecto (teste de sequências).",
   runs: "Para verificar se uma sequência de valores é aleatória.",
@@ -322,6 +320,7 @@ const EX = {
   chi2: { d: "sexo\tprefere\nM\tsim\nM\tsim\nM\tnao\nF\tnao\nF\tnao\nF\tsim\nM\tsim\nF\tnao", v: { cat1: "sexo", cat2: "prefere" } },
   fisher: { d: "grupo\tcurou\nA\tsim\nA\tsim\nA\tnao\nB\tnao\nB\tnao\nB\tsim", v: { cat1: "grupo", cat2: "curou" } },
   median: { d: "metodo\tnota\nA\t6\nA\t7\nA\t6\nB\t7\nB\t8\nB\t7\nC\t5\nC\t6\nC\t5", v: { num: "nota", group: "metodo" } },
+  kw: { d: "metodo\tnota\nA\t6\nA\t7\nA\t6\nB\t7\nB\t8\nB\t7\nC\t5\nC\t6\nC\t5", v: { num: "nota", group: "metodo" } },
   ks2: { d: "grupo\tnota\nA\t7\nA\t8\nA\t6\nA\t7\nB\t5\nB\t6\nB\t5\nB\t4", v: { num: "nota", group: "grupo" } },
   ww2: { d: "grupo\tnota\nA\t7\nA\t8\nA\t6\nA\t7\nB\t5\nB\t6\nB\t5\nB\t4", v: { num: "nota", group: "grupo" } },
   runs: { d: "valor\n2\n8\n3\n7\n2\n9\n3\n8\n2\n7", v: { num: "valor" } },
@@ -365,6 +364,7 @@ function AnaliseQuantitativa({ active = true }) {
   const [pasteText, setPasteText] = useState("");
   const [result, setResult] = useState(null);
   const [pendingCalc, setPendingCalc] = useState(false);
+  const [copied, setCopied] = useState(false);
   const resultRef = useRef(null);
   const chartRef = useRef(null);
   const [chartColor, setChartColor] = useState("#1f7a8c");
@@ -427,7 +427,6 @@ function AnaliseQuantitativa({ active = true }) {
   };
 
   const pValue = result && result.res && Number.isFinite(result.res.p) ? result.res.p : null;
-  const stars = (p) => (p < 0.001 ? "***" : p < 0.01 ? "**" : p < 0.05 ? "*" : "n.s.");
   const BRACKET_KINDS = ["t2", "anova", "mw", "median", "ks2", "ww2", "moses", "anova2", "chi2", "fisher"];
   const BAR_KINDS = ["t2", "anova", "mw", "median", "ks2", "ww2", "moses", "anova2"];
   const barsType = () => !chartType || chartType === "barras"; // colchete só faz sentido em barras verticais
@@ -484,6 +483,25 @@ function AnaliseQuantitativa({ active = true }) {
     img.src = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(str)));
   };
 
+  // exporta a grade de dados como CSV (separador ";" para não conflitar com a vírgula decimal)
+  const exportCSV = () => {
+    const esc = (v) => { const s = String(v ?? ""); return /[";\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+    const lines = [grid.headers.map(esc).join(";"), ...grid.rows.map((r) => r.map(esc).join(";"))];
+    dlFile(new Blob(["﻿" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" }), "dados.csv");
+  };
+  // copia os números do resultado (texto renderizado) para a área de transferência
+  const copyResult = async () => {
+    const txt = resultRef.current ? resultRef.current.innerText : "";
+    if (!txt.trim()) return;
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) await navigator.clipboard.writeText(txt);
+      else throw new Error("sem clipboard");
+    } catch {
+      const ta = document.createElement("textarea"); ta.value = txt; ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta); ta.select(); try { document.execCommand("copy"); } catch {} document.body.removeChild(ta);
+    }
+    setCopied(true); setTimeout(() => setCopied(false), 1800);
+  };
   const exportPDF = () => {
     const w = window.open("", "_blank"); if (!w) { try { window.alert("Permita pop-ups para gerar o relatório em PDF."); } catch {} return; }
     let dataTbl = "<p>Sem dados.</p>";
@@ -515,6 +533,23 @@ function AnaliseQuantitativa({ active = true }) {
   // restaurar / autosave (grade)
   useEffect(() => { migrarChaveAntiga("qualmap_quant_v2", LSK); try { const s = window.localStorage.getItem(LSK); if (s) { const o = JSON.parse(s); if (o && o.grid && Array.isArray(o.grid.headers)) setGrid(o.grid); } } catch {} }, []);
   useEffect(() => { const t = setTimeout(() => { const r = salvarLocal(LSK, JSON.stringify({ grid })); setErroLocal(r.ok ? null : r); }, 600); return () => clearTimeout(t); }, [grid]);
+  // expõe a Análise Quantitativa ao Salvar/Abrir do Enlace (App.jsx)
+  const quantRef = useRef({});
+  quantRef.current = { grid, testKey, vars, mu0, conf, hMoses };
+  useEffect(() => {
+    SUITE.getQuant = () => ({ ...quantRef.current });
+    SUITE.setQuant = (d) => {
+      if (!d) return;
+      if (d.grid && Array.isArray(d.grid.headers)) setGrid(d.grid);
+      if (d.testKey) setTestKey(d.testKey);
+      if (d.vars && typeof d.vars === "object") setVars(d.vars);
+      if (d.mu0 != null) setMu0(String(d.mu0));
+      if (d.conf != null) setConf(String(d.conf));
+      if (d.hMoses != null) setHMoses(String(d.hMoses));
+      setResult(null); setErr("");
+    };
+    return () => { SUITE.getQuant = null; SUITE.setQuant = null; };
+  }, []);
 
   const data = useMemo(() => gridToData(grid), [grid]);
   const test = ALL.find((t) => t.key === testKey);
@@ -528,15 +563,18 @@ function AnaliseQuantitativa({ active = true }) {
   const addCol = () => setGrid((g) => ({ headers: [...g.headers, "var" + (g.headers.length + 1)], rows: g.rows.map((row) => [...row, ""]) }));
   const removeRow = (r) => setGrid((g) => ({ ...g, rows: g.rows.length > 1 ? g.rows.filter((_, i) => i !== r) : g.rows }));
   const removeCol = (c) => setGrid((g) => (g.headers.length > 1 ? { headers: g.headers.filter((_, j) => j !== c), rows: g.rows.map((row) => row.filter((_, j) => j !== c)) } : g));
-  const limpar = () => { setGrid(emptyGrid()); setResult(null); setErr(""); };
+  // há dados digitados na grade? (usado p/ confirmar antes de sobrescrever)
+  const gridHasData = () => grid.rows.some((row) => row.some((v) => String(v ?? "").trim() !== ""));
+  const limpar = () => { if (gridHasData() && !window.confirm("Limpar toda a grade de dados? Esta ação não pode ser desfeita.")) return; setGrid(emptyGrid()); setResult(null); setErr(""); };
 
   const processar = (txt) => {
     const g = textToGrid(txt);
     if (!g || !g.headers.length) { setErr("Não consegui ler a tabela colada. Verifique se a 1ª linha tem os nomes das colunas."); return; }
+    if (gridHasData() && !window.confirm("Substituir os dados atuais da grade? Esta ação não pode ser desfeita.")) return;
     setErr(""); setGrid(g); setShowPaste(false); setResult(null);
   };
   const onFile = (e) => { const f = e.target.files && e.target.files[0]; if (!f) return; const r = new FileReader(); r.onload = () => processar(String(r.result)); r.readAsText(f); e.target.value = ""; };
-  const exemplo = () => { setGrid(textToGrid("grupo\tnota\tidade\tpre\tpos\nA\t7,5\t20\t5\t7\nA\t8,0\t22\t6\t8\nA\t6,5\t19\t4\t6\nA\t7,0\t21\t5\t7\nB\t5,5\t23\t4\t5\nB\t6,0\t20\t5\t6\nB\t5,0\t24\t3\t5\nB\t6,5\t22\t4\t6")); setResult(null); setErr(""); };
+  const exemplo = () => { if (gridHasData() && !window.confirm("Carregar o exemplo vai substituir os dados atuais da grade. Continuar?")) return; setGrid(textToGrid("grupo\tnota\tidade\tpre\tpos\nA\t7,5\t20\t5\t7\nA\t8,0\t22\t6\t8\nA\t6,5\t19\t4\t6\nA\t7,0\t21\t5\t7\nB\t5,5\t23\t4\t5\nB\t6,0\t20\t5\t6\nB\t5,0\t24\t3\t5\nB\t6,5\t22\t4\t6")); setResult(null); setErr(""); };
 
   const col = (name) => (data && name ? data.cols[name] : []);
   const groupsOf = (numName, groupName) => {
@@ -597,7 +635,7 @@ function AnaliseQuantitativa({ active = true }) {
         res = ST.cronbach((vars.items || []).map(col));
       } else if (testKey === "runs") {
         res = ST.runsTest(col(vars.num));
-      } else if (testKey === "t2" || testKey === "anova" || testKey === "mw" || testKey === "median" || testKey === "ks2" || testKey === "ww2") {
+      } else if (testKey === "t2" || testKey === "anova" || testKey === "mw" || testKey === "kw" || testKey === "median" || testKey === "ks2" || testKey === "ww2") {
         const { order, map } = groupsOf(vars.num, vars.group);
         if (order.length < 2) throw new Error("A variável de grupo precisa ter ao menos 2 categorias.");
         if (testKey === "anova") {
@@ -617,6 +655,7 @@ function AnaliseQuantitativa({ active = true }) {
           if (!res.error) res.assump = buildAssump(order.map((k) => map[k]), order, "anova");
         }
         else if (testKey === "median") res = ST.medianTest(order.map((k) => map[k]), order);
+        else if (testKey === "kw") res = ST.kruskalWallis(order.map((k) => map[k]), order);
         else {
           if (order.length > 2) throw new Error("Selecione um fator com exatamente 2 grupos (há " + order.length + ").");
           const A = map[order[0]], B = map[order[1]];
@@ -647,6 +686,7 @@ function AnaliseQuantitativa({ active = true }) {
   // carrega o exemplo do teste atual (preenche a grade, seleciona as variáveis e calcula)
   const carregarExemploTeste = () => {
     const ex = EX[testKey]; if (!ex) return;
+    if (gridHasData() && !window.confirm("Carregar o exemplo deste teste vai substituir os dados atuais da grade. Continuar?")) return;
     setErr(""); setGrid(textToGrid(ex.d)); setVars(ex.v || {});
     if (ex.mu0 != null) setMu0(ex.mu0);
     if (ex.h != null) setHMoses(ex.h);
@@ -835,7 +875,7 @@ function AnaliseQuantitativa({ active = true }) {
                   <span style={{ fontSize: 11, color: "#9aa7b2" }}>marque quais comparações mostrar no gráfico:</span>
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-                  {result.res.posthoc.map((pp) => { const key = pp.a + "|" + pp.b; const st = pp.padj < 0.001 ? "***" : pp.padj < 0.01 ? "**" : pp.padj < 0.05 ? "*" : "n.s."; return (
+                  {result.res.posthoc.map((pp) => { const key = pp.a + "|" + pp.b; const st = stars(pp.padj); return (
                     <div key={key} style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                       <label style={{ ...chk, minWidth: 120 }}><input type="checkbox" checked={shownPairs.has(key)} onChange={(e) => setShownPairs((s) => { const n = new Set(s); e.target.checked ? n.add(key) : n.delete(key); return n; })} /> {pp.a}×{pp.b} <b style={{ color: pp.padj < 0.05 ? "#2e7d4f" : "#9aa7b2" }}>{st}</b></label>
                       {shownPairs.has(key) && <input value={sigCustom[key] || ""} onChange={(e) => setSigCustom((s) => ({ ...s, [key]: e.target.value }))} placeholder={bracketLabel(key, pp.padj)} title="texto sobre este colchete" style={{ ...inp, width: 130, flex: "0 0 auto" }} />}
@@ -880,6 +920,8 @@ function AnaliseQuantitativa({ active = true }) {
       <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
         <h2 style={T.h2}>Análise Quantitativa</h2>
         <div style={{ flex: 1 }} />
+        {result && <button style={T.btn} onClick={copyResult} title="copiar os números do resultado para colar em outro lugar">{copied ? "Copiado!" : "Copiar resultado"}</button>}
+        <button style={T.btn} onClick={exportCSV} title="baixar os dados da grade em CSV (separador ;)">Exportar CSV</button>
         <button style={T.btn} onClick={exportPDF} title="gerar relatório com os dados e o resultado">Relatório PDF</button>
       </div>
       <p style={T.sub}>Testes estatísticos sobre dados que você cola ou abre aqui. Independente das outras janelas.</p>
@@ -898,7 +940,7 @@ function AnaliseQuantitativa({ active = true }) {
                     <th key={c} style={{ position: "sticky", top: 0, background: "#f7f9fb", borderBottom: "1px solid #e3e9ee", padding: 2 }}>
                       <div style={{ display: "flex", flexDirection: "column", alignItems: "stretch" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
-                          <input value={h} onChange={(e) => setHeader(c, e.target.value)} style={{ width: 78, boxSizing: "border-box", padding: "4px 5px", border: "1px solid #cfd6dd", borderRadius: 4, fontSize: 12, fontWeight: 700, color: "#34495e", textAlign: "center" }} />
+                          <input value={h} onChange={(e) => setHeader(c, e.target.value)} aria-label={`nome da variável ${c + 1}`} style={{ width: 78, boxSizing: "border-box", padding: "4px 5px", border: "1px solid #cfd6dd", borderRadius: 4, fontSize: 12, fontWeight: 700, color: "#34495e", textAlign: "center" }} />
                           {grid.headers.length > 1 && <button onClick={() => removeCol(c)} title="remover coluna" style={{ border: "none", background: "none", color: "#b3402f", cursor: "pointer", fontSize: 11, padding: 0 }}>✕</button>}
                         </div>
                         {data && data.headers[c] && <div style={{ fontSize: 9, fontWeight: 400, color: data.numeric[data.headers[c]] ? "#2e7d4f" : "#b06a1f", textAlign: "center" }}>{data.numeric[data.headers[c]] ? "num" : "categ"}</div>}
@@ -913,7 +955,7 @@ function AnaliseQuantitativa({ active = true }) {
                   <tr key={r}>
                     <td style={{ textAlign: "center", color: "#9aa7b2" }}>{grid.rows.length > 1 ? <button onClick={() => removeRow(r)} title="remover linha" style={{ border: "none", background: "none", color: "#c3ccd4", cursor: "pointer", fontSize: 11, padding: 0 }}>✕</button> : null}</td>
                     {grid.headers.map((_, c) => (
-                      <td key={c} style={{ padding: 1 }}><input value={row[c] != null ? row[c] : ""} onChange={(e) => setCell(r, c, e.target.value)} style={{ width: 86, boxSizing: "border-box", padding: "4px 5px", border: "1px solid #eef1f4", borderRadius: 3, fontSize: 12.5, fontFamily: "inherit" }} /></td>
+                      <td key={c} style={{ padding: 1 }}><input value={row[c] != null ? row[c] : ""} onChange={(e) => setCell(r, c, e.target.value)} aria-label={`${grid.headers[c] || "variável " + (c + 1)}, linha ${r + 1}`} style={{ width: 86, boxSizing: "border-box", padding: "4px 5px", border: "1px solid #eef1f4", borderRadius: 3, fontSize: 12.5, fontFamily: "inherit" }} /></td>
                     ))}
                     <td />
                   </tr>
@@ -1016,6 +1058,7 @@ function EffectSize({ kind, value, extra }) {
   else if (kind === "r" || kind === "rho") { label = kind === "r" ? "r" : "ρ"; mag = band([0.1, 0.3, 0.5], ["insignificante", "pequeno", "médio", "grande"]); }
   else if (kind === "eta2" || kind === "omega2") { label = kind === "eta2" ? "η²" : "ω²"; mag = band([0.01, 0.06, 0.14], ["insignificante", "pequeno", "médio", "grande"]); }
   else if (kind === "cramer") { label = "V de Cramér"; mag = band([0.1, 0.3, 0.5], ["insignificante", "pequeno", "médio", "grande"]); }
+  else if (kind === "eps2") { label = "ε²"; mag = band([0.01, 0.06, 0.14], ["insignificante", "pequeno", "médio", "grande"]); }
   else return null;
   return <div style={{ marginTop: 6, fontSize: 12, color: "#34495e" }}>Tamanho do efeito: <strong>{fmt(value, 3)}</strong> ({label}{extra ? ", " + extra : ""}) — magnitude <strong>{mag}</strong>.</div>;
 }
@@ -1053,7 +1096,7 @@ function Result({ data }) {
       {key === "t1" && <><Row k="Média" v={fmt(res.mean, 4)} /><Row k="μ₀" v={fmt(res.mu0, 4)} /><Row k="DP" v={fmt(res.sd, 4)} /><Row k="t" v={fmt(res.t, 4)} /><Row k="gl" v={res.df} /><Row k="p (bicaudal)" v={fmtP(res.p)} /><Row k={`IC ${Math.round(res.conf * 100)}% da média`} v={`[${fmt(res.ci[0], 3)} ; ${fmt(res.ci[1], 3)}]`} /><Row k="d de Cohen" v={fmt(res.d, 3)} /><Sig p={res.p} /><EffectSize kind="d" value={res.d} /><Assumptions a={res.assump} /></>}
       {(key === "t2") && <><Row k={`Média ${res.g1}`} v={`${fmt(res.mean1, 3)} (n=${res.n1})`} /><Row k={`Média ${res.g2}`} v={`${fmt(res.mean2, 3)} (n=${res.n2})`} /><Row k="t" v={fmt(res.t, 4)} /><Row k="gl" v={fmt(res.df, 2)} /><Row k="p (bicaudal)" v={fmtP(res.p)} /><Row k="d de Cohen" v={fmt(res.d, 3)} /><Sig p={res.p} /><EffectSize kind="d" value={res.d} /><Assumptions a={res.assump} /></>}
       {key === "tp" && <><Row k="Média 1" v={fmt(res.mean1, 3)} /><Row k="Média 2" v={fmt(res.mean2, 3)} /><Row k="Média das diferenças" v={fmt(res.meanDiff, 4)} /><Row k="t" v={fmt(res.t, 4)} /><Row k="gl" v={res.df} /><Row k="p (bicaudal)" v={fmtP(res.p)} /><Row k="d de Cohen" v={fmt(res.d, 3)} /><Sig p={res.p} /><EffectSize kind="d" value={res.d} extra="dz" /><Assumptions a={res.assump} /></>}
-      {key === "anova" && <><Row k="F" v={fmt(res.F, 4)} /><Row k="gl" v={`${res.dfb} ; ${res.dfw}`} /><Row k="p" v={fmtP(res.p)} /><Row k="η² (eta²)" v={fmt(res.eta2, 3)} /><div style={{ overflowX: "auto", marginTop: 8 }}><table style={{ borderCollapse: "collapse" }}><thead><tr>{["Grupo", "n", "Média", "DP"].map((h) => <th key={h} style={T.th}>{h}</th>)}</tr></thead><tbody>{res.groups.map((g) => <tr key={g.name}><td style={T.td}>{g.name}</td><td style={T.td}>{g.n}</td><td style={T.td}>{fmt(g.mean, 3)}</td><td style={T.td}>{fmt(g.sd, 3)}</td></tr>)}</tbody></table></div><Sig p={res.p} />{res.posthoc && res.posthoc.length > 0 && <div style={{ marginTop: 10 }}><div style={{ fontSize: 11.5, fontWeight: 700, color: "#5a6b7a", marginBottom: 4 }}>Pós-hoc — quais grupos diferem <span style={{ fontWeight: 400, color: "#9aa7b2" }}>({res.posthocMethod === "tukey" ? "Tukey HSD" : "t de Welch · Bonferroni"})</span></div><div style={{ overflowX: "auto" }}><table style={{ borderCollapse: "collapse" }}><thead><tr>{["Par", "p", "p ajustado", ""].map((h) => <th key={h} style={T.th}>{h}</th>)}</tr></thead><tbody>{res.posthoc.map((pp, i) => <tr key={i}><td style={T.td}>{pp.a} × {pp.b}</td><td style={T.td}>{fmtP(pp.p)}</td><td style={T.td}>{fmtP(pp.padj)}</td><td style={{ ...T.td, fontWeight: 700, color: pp.padj < 0.05 ? "#2e7d4f" : "#9aa7b2" }}>{pp.padj < 0.001 ? "***" : pp.padj < 0.01 ? "**" : pp.padj < 0.05 ? "*" : "n.s."}</td></tr>)}</tbody></table></div></div>}<EffectSize kind="eta2" value={res.eta2} extra={"ω² = " + fmt((res.ssb - res.dfb * res.msw) / (res.ssb + res.ssw + res.msw), 3)} /><Assumptions a={res.assump} /></>}
+      {key === "anova" && <><Row k="F" v={fmt(res.F, 4)} /><Row k="gl" v={`${res.dfb} ; ${res.dfw}`} /><Row k="p" v={fmtP(res.p)} /><Row k="η² (eta²)" v={fmt(res.eta2, 3)} /><div style={{ overflowX: "auto", marginTop: 8 }}><table style={{ borderCollapse: "collapse" }}><thead><tr>{["Grupo", "n", "Média", "DP"].map((h) => <th key={h} style={T.th}>{h}</th>)}</tr></thead><tbody>{res.groups.map((g) => <tr key={g.name}><td style={T.td}>{g.name}</td><td style={T.td}>{g.n}</td><td style={T.td}>{fmt(g.mean, 3)}</td><td style={T.td}>{fmt(g.sd, 3)}</td></tr>)}</tbody></table></div><Sig p={res.p} />{res.posthoc && res.posthoc.length > 0 && <div style={{ marginTop: 10 }}><div style={{ fontSize: 11.5, fontWeight: 700, color: "#5a6b7a", marginBottom: 4 }}>Pós-hoc — quais grupos diferem <span style={{ fontWeight: 400, color: "#9aa7b2" }}>({res.posthocMethod === "tukey" ? "Tukey HSD" : "t de Welch · Bonferroni"})</span></div><div style={{ overflowX: "auto" }}><table style={{ borderCollapse: "collapse" }}><thead><tr>{["Par", "p", "p ajustado", ""].map((h) => <th key={h} style={T.th}>{h}</th>)}</tr></thead><tbody>{res.posthoc.map((pp, i) => <tr key={i}><td style={T.td}>{pp.a} × {pp.b}</td><td style={T.td}>{fmtP(pp.p)}</td><td style={T.td}>{fmtP(pp.padj)}</td><td style={{ ...T.td, fontWeight: 700, color: pp.padj < 0.05 ? "#2e7d4f" : "#9aa7b2" }}>{stars(pp.padj)}</td></tr>)}</tbody></table></div></div>}<EffectSize kind="eta2" value={res.eta2} extra={"ω² = " + fmt((res.ssb - res.dfb * res.msw) / (res.ssb + res.ssw + res.msw), 3)} /><Assumptions a={res.assump} /></>}
       {key === "pearson" && <><Row k="r" v={fmt(res.r, 4)} /><Row k="r² (variância explicada)" v={fmt(res.r2, 4)} /><Row k="t" v={fmt(res.t, 4)} /><Row k="gl" v={res.df} /><Row k="p" v={fmtP(res.p)} /><Row k={`IC ${Math.round(res.conf * 100)}% de r`} v={`[${fmt(res.ci[0], 3)} ; ${fmt(res.ci[1], 3)}]`} /><Sig p={res.p} /><EffectSize kind="r" value={res.r} /></>}
       {key === "spearman" && <><Row k="ρ (rho)" v={fmt(res.rho, 4)} /><Row k="t" v={fmt(res.t, 4)} /><Row k="gl" v={res.df} /><Row k="p" v={fmtP(res.p)} /><Sig p={res.p} /><EffectSize kind="rho" value={res.rho} /></>}
       {key === "wilcoxon" && <><Row k="W⁺" v={fmt(res.Wplus, 1)} /><Row k="W⁻" v={fmt(res.Wminus, 1)} /><Row k="W" v={fmt(res.W, 1)} /><Row k="z" v={fmt(res.z, 4)} /><Row k="p (aprox. normal)" v={fmtP(res.p)} /><Row k="n (pares ≠ 0)" v={res.n} /><Sig p={res.p} /><EffectSize kind="r" value={Math.abs(res.z) / Math.sqrt(res.n)} extra="r = |z|/√n" /></>}
@@ -1063,6 +1106,7 @@ function Result({ data }) {
       {key === "anova2" && <><div style={{ fontSize: 12, color: "#6b7c8a", marginBottom: 6 }}>{res.balanced ? "Delineamento balanceado." : "Atenção: delineamento NÃO balanceado — as somas de quadrados são aproximadas."}</div><div style={{ overflowX: "auto" }}><table style={{ borderCollapse: "collapse", width: "100%" }}><thead><tr>{["Fonte", "SQ", "gl", "QM", "F", "p"].map((h) => <th key={h} style={T.th}>{h}</th>)}</tr></thead><tbody>{[["Fator A (" + res.nameA + ")", res.A], ["Fator B (" + res.nameB + ")", res.B], ["Interação A×B", res.AB]].map(([nm, r]) => <tr key={nm}><td style={T.td}>{nm}</td><td style={T.td}>{fmt(r.ss, 2)}</td><td style={T.td}>{r.df}</td><td style={T.td}>{fmt(r.ms, 2)}</td><td style={T.td}>{fmt(r.F, 3)}</td><td style={T.td}>{fmtP(r.p)}</td></tr>)}<tr><td style={T.td}>Resíduo</td><td style={T.td}>{fmt(res.resid.ss, 2)}</td><td style={T.td}>{res.resid.df}</td><td style={T.td}>{fmt(res.resid.ms, 2)}</td><td style={T.td}>—</td><td style={T.td}>—</td></tr></tbody></table></div><div style={{ fontSize: 12, marginTop: 8, color: "#34495e" }}>Interação {res.AB.p < 0.05 ? "significativa" : "não significativa"} (p {fmtP(res.AB.p)}).</div></>}
       {key === "fisher" && <><Row k="Razão de chances (OR)" v={Number.isFinite(res.oddsRatio) ? fmt(res.oddsRatio, 3) : "∞"} /><Row k="p exato (bicaudal)" v={fmtP(res.p)} /><div style={{ overflowX: "auto", marginTop: 8 }}><table style={{ borderCollapse: "collapse" }}><thead><tr><th style={T.th}></th>{res.r2.map((c) => <th key={c} style={T.th}>{c}</th>)}</tr></thead><tbody>{res.tbl.map((row, i) => <tr key={i}><td style={T.td}><strong>{res.r1[i]}</strong></td>{row.map((v, j) => <td key={j} style={T.td}>{v}</td>)}</tr>)}</tbody></table></div><Sig p={res.p} />{(() => { const [a, b] = res.tbl[0], [c, d] = res.tbl[1]; const den = Math.sqrt((a + b) * (c + d) * (a + c) * (b + d)); return den ? <EffectSize kind="cramer" value={Math.abs(a * d - b * c) / den} extra="φ" /> : null; })()}</>}
       {key === "median" && <><Row k="Mediana global" v={fmt(res.median, 3)} /><Row k="χ²" v={fmt(res.chi2, 4)} /><Row k="gl" v={res.df} /><Row k="p" v={fmtP(res.p)} /><div style={{ overflowX: "auto", marginTop: 8 }}><table style={{ borderCollapse: "collapse" }}><thead><tr>{["Grupo", "n", "Acima da mediana"].map((h) => <th key={h} style={T.th}>{h}</th>)}</tr></thead><tbody>{res.groups.map((g) => <tr key={g.name}><td style={T.td}>{g.name}</td><td style={T.td}>{g.n}</td><td style={T.td}>{g.above}</td></tr>)}</tbody></table></div><Sig p={res.p} /></>}
+      {key === "kw" && <><Row k="H" v={fmt(res.H, 4)} /><Row k="gl" v={res.df} /><Row k="p" v={fmtP(res.p)} /><Row k="N" v={res.N} /><div style={{ overflowX: "auto", marginTop: 8 }}><table style={{ borderCollapse: "collapse" }}><thead><tr>{["Grupo", "n", "Soma de postos", "Posto médio"].map((h) => <th key={h} style={T.th}>{h}</th>)}</tr></thead><tbody>{res.groups.map((g) => <tr key={g.name}><td style={T.td}>{g.name}</td><td style={T.td}>{g.n}</td><td style={T.td}>{fmt(g.rankSum, 1)}</td><td style={T.td}>{fmt(g.rankMean, 2)}</td></tr>)}</tbody></table></div><Sig p={res.p} /><EffectSize kind="eps2" value={res.eps2} /></>}
       {key === "ks2" && <><Row k={`grupos`} v={`${res.g1} (n=${res.n1}) vs ${res.g2} (n=${res.n2})`} /><Row k="D (máx. diferença das ECDF)" v={fmt(res.D, 4)} /><Row k="p (aprox.)" v={fmtP(res.p)} /><Sig p={res.p} /></>}
       {key === "ww2" && <><Row k={`grupos`} v={`${res.g1} (n=${res.n1}) vs ${res.g2} (n=${res.n2})`} /><Row k="Nº de sequências (runs)" v={res.runs} /><Row k="Esperado" v={fmt(res.expected, 2)} /><Row k="z" v={fmt(res.z, 4)} /><Row k="p" v={fmtP(res.p)} /><Sig p={res.p} /></>}
       {key === "moses" && <><Row k="Controle / experimental" v={`${res.control} (n=${res.m}) / ${res.experimental} (n=${res.n})`} /><Row k="h (aparado)" v={res.h} /><Row k="Span do controle" v={res.span} /><Row k="p (unicaudal)" v={fmtP(res.p)} /><div style={{ marginTop: 10, fontSize: 12.5, padding: "8px 10px", borderRadius: 6, background: res.p < 0.05 ? "#e7f3ec" : "#f2f5f7", border: "1px solid " + (res.p < 0.05 ? "#bfe0cc" : "#e3e9ee") }}>{res.p < 0.05 ? "O grupo experimental apresenta reações mais extremas que o controle (p < 0,05)." : "Sem evidência de reações extremas (p ≥ 0,05)."}</div></>}

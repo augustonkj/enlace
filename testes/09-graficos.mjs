@@ -12,6 +12,7 @@ const dom = new JSDOM(readFileSync(new URL("../Enlace.html", import.meta.url), "
   beforeParse(w) {
     w.ResizeObserver = class { constructor(cb) { this.cb = cb; } observe(el) { this.cb([{ target: el, contentRect: { width: 640, height: 320 } }]); } unobserve() {} disconnect() {} };
     w.scrollTo = () => {};
+    w.confirm = () => true; // trocar de exemplo pede confirmação: o usuário aceita
     // o recharts mede o contêiner: sem layout no jsdom, forçamos um tamanho
     Object.defineProperty(w.HTMLElement.prototype, "offsetWidth", { get() { return 640; }, configurable: true });
     Object.defineProperty(w.HTMLElement.prototype, "offsetHeight", { get() { return 320; }, configurable: true });

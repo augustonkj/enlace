@@ -44,7 +44,8 @@ export default function App() {
       const qual = SUITE.getQual ? await SUITE.getQual() : null;
       const geral = SUITE.getGeral ? SUITE.getGeral() : null;
       const revisao = SUITE.getRevisao ? SUITE.getRevisao() : null;
-      const payload = { __enlace: 1, savedAt: new Date().toISOString(), tar, qual, geral, revisao };
+      const quant = SUITE.getQuant ? SUITE.getQuant() : null;
+      const payload = { __enlace: 1, savedAt: new Date().toISOString(), tar, qual, geral, revisao, quant };
       const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
       const u = URL.createObjectURL(blob); const a = document.createElement("a");
       a.href = u; a.download = `enlace-${new Date().toISOString().slice(0, 10)}.json`; a.click();
@@ -60,10 +61,12 @@ export default function App() {
         const o = JSON.parse(String(r.result));
         // __qualmap: arquivos salvos quando o programa tinha o nome antigo
         if (!o || !(o.__enlace || o.__qualmap)) { setMsg("este arquivo não é um projeto do Enlace"); setTimeout(() => setMsg(""), 3000); return; }
+        if (!window.confirm("Abrir este projeto vai substituir o trabalho atual em todas as janelas. Continuar?")) { setMsg(""); return; }
         if (o.tar && SUITE.setTar) SUITE.setTar(o.tar);
         if (o.qual && SUITE.setQual) await SUITE.setQual(o.qual);
         if (o.geral && SUITE.setGeral) SUITE.setGeral(o.geral);
         if (o.revisao && SUITE.setRevisao) SUITE.setRevisao(o.revisao);
+        if (o.quant && SUITE.setQuant) SUITE.setQuant(o.quant);
         setMsg("projeto do Enlace restaurado"); setTimeout(() => setMsg(""), 2500);
       } catch (e) { setMsg("não foi possível abrir o arquivo"); setTimeout(() => setMsg(""), 3000); }
     };
@@ -89,9 +92,9 @@ export default function App() {
             <div style={{ fontSize: 10.5, color: "#7a8b99" }}>análises qualitativas, quantitativas e diagramas</div>
           </div>
         </div>
-        <div style={{ display: "flex", border: "1px solid #cfd6dd", borderRadius: 6, overflow: "hidden", marginLeft: 6 }}>
+        <div role="tablist" aria-label="Janelas do Enlace" style={{ display: "flex", border: "1px solid #cfd6dd", borderRadius: 6, overflow: "hidden", marginLeft: 6 }}>
           {tabs.map(([v, l]) => (
-            <button key={v} onClick={() => setTool(v)} style={{ border: "none", padding: "7px 14px", cursor: "pointer", fontSize: 12.5, fontWeight: 600, background: tool === v ? "#1f7a8c" : "#fff", color: tool === v ? "#fff" : "#46555f" }}>{l}</button>
+            <button key={v} role="tab" aria-selected={tool === v} onClick={() => setTool(v)} style={{ border: "none", padding: "7px 14px", cursor: "pointer", fontSize: 12.5, fontWeight: 600, background: tool === v ? "#1f7a8c" : "#fff", color: tool === v ? "#fff" : "#46555f" }}>{l}</button>
           ))}
         </div>
         <div style={{ flex: 1 }} />
@@ -110,9 +113,9 @@ export default function App() {
       {tool === "qual" && (
         <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 14px", borderBottom: "1px solid #eef1f4", background: "#fafbfc", flexShrink: 0, flexWrap: "wrap" }}>
           <span style={{ fontSize: 11.5, color: "#7a8b99", fontWeight: 600 }}>Qualitativa:</span>
-          <div style={{ display: "flex", border: "1px solid #cfd6dd", borderRadius: 6, overflow: "hidden" }}>
+          <div role="tablist" aria-label="Sub-abas da Qualitativa" style={{ display: "flex", border: "1px solid #cfd6dd", borderRadius: 6, overflow: "hidden" }}>
             {QUAL_SUBS.map(([v, l]) => (
-              <button key={v} onClick={() => setQualSub(v)} style={{ border: "none", padding: "5px 14px", cursor: "pointer", fontSize: 12, fontWeight: 600, background: qualSub === v ? "#1f7a8c" : "#fff", color: qualSub === v ? "#fff" : "#5a6b7a" }}>{l}</button>
+              <button key={v} role="tab" aria-selected={qualSub === v} onClick={() => setQualSub(v)} style={{ border: "none", padding: "5px 14px", cursor: "pointer", fontSize: 12, fontWeight: 600, background: qualSub === v ? "#1f7a8c" : "#fff", color: qualSub === v ? "#fff" : "#5a6b7a" }}>{l}</button>
             ))}
           </div>
           {qualSub === "tar" && (<>

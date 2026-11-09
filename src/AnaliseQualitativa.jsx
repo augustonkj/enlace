@@ -427,8 +427,14 @@ function absOffset(node, offset) {
   while (el && !(el.dataset && el.dataset.start != null)) el = el.parentElement;
   if (!el) return null;
   const base = parseInt(el.dataset.start, 10);
-  if (node.nodeType === 3) return base + offset;
-  return base;
+  if (node.nodeType !== 3) return base;
+  // com a busca ativa o segmento vira vários filhos (texto + <mark>): soma o
+  // comprimento do texto de todos os nós anteriores até o elemento [data-start],
+  // senão o recorte cai em caracteres errados.
+  let extra = offset;
+  for (let cur = node; cur && cur !== el; cur = cur.parentNode)
+    for (let sib = cur.previousSibling; sib; sib = sib.previousSibling) extra += (sib.textContent || "").length;
+  return base + extra;
 }
 
 function escapeHTML(s) {
@@ -500,6 +506,7 @@ function App() {
   const [showHelp, setShowHelp] = useState(false);
   useEffect(() => { if (!showHelp) return; const h = (e) => { if (e.key === "Escape") setShowHelp(false); }; window.addEventListener("keydown", h); return () => window.removeEventListener("keydown", h); }, [showHelp]);
   const saveTimer = useRef(null);
+  const projectRef = useRef(null); projectRef.current = project; // sempre o projeto atual, p/ flush do autosave
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState(null);
   const [erroLocal, setErroLocal] = useState(null);
@@ -543,6 +550,14 @@ function App() {
     }, 600);
   }, [project]);
 
+  // grava o projeto atual imediatamente (cancela o debounce), para não perder as
+  // últimas edições ao trocar/criar/abrir projeto dentro da janela de 600ms.
+  const flushSave = async () => {
+    clearTimeout(saveTimer.current); saveTimer.current = null;
+    const p = projectRef.current;
+    if (p) { try { await saveKey(STORE.proj(p.id), { ...p, updated: Date.now() }); } catch {} }
+  };
+
   const update = useCallback((patch) => setProject((p) => ({ ...p, ...((typeof patch === "function" ? patch(p) : patch) || {}) })), []);
   useEffect(() => {
     SUITE.getQual = async () => {
@@ -566,11 +581,13 @@ function App() {
   }, [project]);
 
   // ---- projetos ----
-  async function switchProject(id) {
+  async function switchProject(id, flush = true) {
+    if (flush) await flushSave(); else { clearTimeout(saveTimer.current); saveTimer.current = null; }
     const p = await loadKey(STORE.proj(id));
     if (p) { setProject(migrarProjeto(p)); await saveKey(STORE.active, id); setPending(null); setSelExcerpt(null); }
   }
   async function newProject() {
+    await flushSave();
     const p = emptyProject("Projeto " + (index.length + 1));
     await saveKey(STORE.proj(p.id), p);
     const ni = [...index, { id: p.id, name: p.name }];
@@ -578,6 +595,7 @@ function App() {
     setProject(p); setPending(null); setSelExcerpt(null);
   }
   async function loadExample() {
+    await flushSave();
     const p = migrarProjeto(exampleProject());
     await saveKey(STORE.proj(p.id), p);
     const ni = [...index, { id: p.id, name: p.name }];
@@ -594,11 +612,12 @@ function App() {
   }
   async function deleteProject() {
     if (!confirm("Apagar este projeto? Esta ação não pode ser desfeita.")) return;
+    clearTimeout(saveTimer.current); saveTimer.current = null; // não regravar o projeto que será apagado
     const ni = index.filter((x) => x.id !== project.id);
     try { await window.storage.delete(STORE.proj(project.id)); } catch (e) {}
     if (ni.length === 0) { const p = emptyProject("Projeto 1"); await saveKey(STORE.proj(p.id), p); ni.push({ id: p.id, name: p.name }); }
     setIndex(ni); await saveKey(STORE.index, ni);
-    await switchProject(ni[0].id);
+    await switchProject(ni[0].id, false);
   }
 
   // ---- corpus: acrescentar documentos (nunca substitui o que já foi codificado) ----
