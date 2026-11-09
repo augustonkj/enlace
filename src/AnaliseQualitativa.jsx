@@ -1,5 +1,5 @@
 import React, { useState, useRef, useMemo, useEffect, useCallback } from "react";
-import { SUITE, useModalTrap, AvisoArmazenamento, BarrasH } from "./lib.js";
+import { SUITE, useModalTrap, BarrasH, marcarAlterado } from "./lib.js";
 
 /* ===== Módulo: Análise textual qualitativa (Codifica - Bardin / ATD) ===== */
 const AnaliseQualitativa = (() => {
@@ -92,27 +92,19 @@ function buildWordCloud(words, W, H) {
   return placed;
 }
 
+// Os projetos ficam só na memória desta página — nada é gravado no navegador.
+// O formato de chave/valor (texto JSON) foi mantido para que trocar, criar e
+// apagar projetos continue funcionando igual; o arquivo salvo é o que guarda.
+const memoria = new Map();
 async function loadKey(key) {
-  try {
-    const r = await window.storage.get(key);
-    return r ? JSON.parse(r.value) : null;
-  } catch (e) {
-    return null;
-  }
+  const v = memoria.get(key);
+  return v == null ? null : JSON.parse(v);
 }
-// Devolve {ok}. Antes engolia a falha e quem chamava seguia anunciando "salvo"
-// — com corpus de várias entrevistas a cota do navegador estoura de verdade,
-// e um "✓ salvo" mentiroso custa o trabalho do dia.
 async function saveKey(key, val) {
-  try {
-    await window.storage.set(key, JSON.stringify(val));
-    return { ok: true };
-  } catch (e) {
-    const cheio = !!e && (e.name === "QuotaExceededError" || e.name === "NS_ERROR_DOM_QUOTA_REACHED" || e.code === 22 || e.code === 1014);
-    console.error("storage", e);
-    return { ok: false, cheio, erro: (e && (e.message || e.name)) || String(e) };
-  }
+  memoria.set(key, JSON.stringify(val));
+  return { ok: true };
 }
+async function deleteKey(key) { memoria.delete(key); }
 
 function emptyProject(name = "Novo projeto") {
   return {
@@ -375,7 +367,7 @@ const QHELP = [
     ["Compartilhar", "gera um HTML do projeto para leitura."],
     ["Relatório PDF", "só os resultados: frequência dos códigos, categorias, co-ocorrências, palavras mais frequentes, algumas citações por código, o metatexto e a lista dos documentos. O texto integral dos documentos não entra."],
   ] },
-  { h: "Salvamento", items: ["O trabalho é salvo automaticamente no navegador. Para levar a outro computador, use Salvar (.json) ou Salvar Enlace (backup completo)."] },
+  { h: "Salvamento", items: ["Nada é gravado no navegador: o trabalho só existe enquanto a página está aberta. Use Salvar (.json) ou Salvar Enlace (backup completo) — se houver alterações não salvas, o navegador pergunta antes de fechar."] },
 ];
 
 function parseJSON(text) {
@@ -549,9 +541,6 @@ function App() {
   useEffect(() => { if (!showHelp) return; const h = (e) => { if (e.key === "Escape") setShowHelp(false); }; window.addEventListener("keydown", h); return () => window.removeEventListener("keydown", h); }, [showHelp]);
   const saveTimer = useRef(null);
   const projectRef = useRef(null); projectRef.current = project; // sempre o projeto atual, p/ flush do autosave
-  const [saving, setSaving] = useState(false);
-  const [savedAt, setSavedAt] = useState(null);
-  const [erroLocal, setErroLocal] = useState(null);
   const fileRef = useRef(null);
   const qHelpRef = useRef(null);
 
@@ -573,22 +562,20 @@ function App() {
     })();
   }, []);
 
-  // autosave
+  // guarda o projeto na memória da página (não no navegador) e marca que há o que salvar
+  const projetoInicial = useRef(true);
   useEffect(() => {
     if (!project) return;
-    setSaving(true);
+    if (projetoInicial.current) projetoInicial.current = false; else marcarAlterado();
     clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(async () => {
       const p = { ...project, updated: Date.now() };
-      const rProj = await saveKey(STORE.proj(p.id), p);
+      await saveKey(STORE.proj(p.id), p);
       const idx = (await loadKey(STORE.index)) || [];
       const ni = idx.map((x) => (x.id === p.id ? { id: p.id, name: p.name } : x));
       if (!ni.find((x) => x.id === p.id)) ni.push({ id: p.id, name: p.name });
       setIndex(ni);
-      const rIdx = await saveKey(STORE.index, ni);
-      setSaving(false);
-      if (rProj.ok && rIdx.ok) { setSavedAt(Date.now()); setErroLocal(null); }
-      else setErroLocal(rProj.ok ? rIdx : rProj);   // só marca "salvo" quando salvou mesmo
+      await saveKey(STORE.index, ni);
     }, 600);
   }, [project]);
 
@@ -648,7 +635,7 @@ function App() {
     if (!confirm("Apagar este projeto? Esta ação não pode ser desfeita.")) return;
     clearTimeout(saveTimer.current); saveTimer.current = null; // não regravar o projeto que será apagado
     const ni = index.filter((x) => x.id !== project.id);
-    try { await window.storage.delete(STORE.proj(project.id)); } catch (e) {}
+    await deleteKey(STORE.proj(project.id));
     if (ni.length === 0) { const p = emptyProject("Projeto 1"); await saveKey(STORE.proj(p.id), p); ni.push({ id: p.id, name: p.name }); }
     setIndex(ni); await saveKey(STORE.index, ni);
     await switchProject(ni[0].id, false);
@@ -964,10 +951,6 @@ function App() {
         <span style={{ fontSize: 11, color: C.sub, fontFamily: "system-ui" }}>análise qualitativa</span>
         <Btn onClick={() => setShowHelp(true)}>? Ajuda</Btn>
         <div style={{ flex: 1 }} />
-        <span style={{ fontSize: 11, color: erroLocal ? "#b3402f" : saving ? C.sub : "#2e7d4f", fontFamily: "system-ui", minWidth: 78, textAlign: "right", fontWeight: erroLocal ? 700 : 400 }}
-          title={erroLocal ? "o navegador recusou a gravação — salve num arquivo" : "o trabalho é salvo automaticamente no navegador"}>
-          {erroLocal ? "⚠ não salvo" : saving ? "salvando…" : savedAt ? "✓ salvo " + new Date(savedAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : ""}
-        </span>
         <select value={project.id} onChange={(e) => switchProject(e.target.value)}
           style={{ fontFamily: "system-ui", fontSize: 12, padding: "4px 8px", border: `1px solid ${C.line}`, borderRadius: 4, background: "#fff" }}>
           {index.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -982,7 +965,6 @@ function App() {
         <Btn onClick={clearProject}>Limpar</Btn>
         <Btn onClick={deleteProject} danger>apagar</Btn>
       </div>
-      <AvisoArmazenamento erro={erroLocal} onSalvar={saveFile} />
       {showHelp && (
         <div onClick={() => setShowHelp(false)} role="dialog" aria-modal="true" style={{ position: "fixed", inset: 0, background: "rgba(20,30,38,.45)", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "40px 16px", zIndex: 1000 }}>
           <div ref={qHelpRef} onClick={(e) => e.stopPropagation()} style={{ background: "#fff", borderRadius: 10, maxWidth: 700, width: "100%", maxHeight: "85vh", overflowY: "auto", boxShadow: "0 12px 40px rgba(0,0,0,.25)", padding: "22px 26px", fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" }}>

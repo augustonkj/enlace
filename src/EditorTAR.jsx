@@ -1,5 +1,5 @@
 import React, { useState, useRef, useMemo, useEffect, useCallback } from "react";
-import { VW, VH, SNAP_T, setDims, setSizeCtx, SUITE, useModalTrap, C, NODE_TYPES, TYPE_ORDER, MOMENTS, MOMENT_ORDER, NAT_LBL, ESTAB_LBL, KIND_LBL, brandes, parseCSVfull, csvNorm, colIdx, HELP, TOUR, Hint, Menu, MenuItem, REGION_COLORS, wrapText, sizeOf, degreeMap, clipToRect, distToSeg, qPoint, esc, edgeGeometry, arrowHead, barrierBar, estabBadge, scriptGlyph, calcGlyph, sourceLetter, sourceMark, nodeBody, buildInner, legendMetaFor, snapNode, alignNodes, distributeNodes, depths, forceLayout, arrange, declutter, fillLayout, foldBox, unfoldBox, parseCSV, toGraphML, toGEXF, seedVazio, seedRedeLivre, seedRedeUnica, seedComparativo, seedCadeia, baseState } from "./lib.js";
+import { VW, VH, SNAP_T, setDims, setSizeCtx, SUITE, useMarcarAlterado, useModalTrap, C, NODE_TYPES, TYPE_ORDER, MOMENTS, MOMENT_ORDER, NAT_LBL, ESTAB_LBL, KIND_LBL, brandes, parseCSVfull, csvNorm, colIdx, HELP, TOUR, Hint, Menu, MenuItem, REGION_COLORS, wrapText, sizeOf, degreeMap, clipToRect, distToSeg, qPoint, esc, edgeGeometry, arrowHead, barrierBar, estabBadge, scriptGlyph, calcGlyph, sourceLetter, sourceMark, nodeBody, buildInner, legendMetaFor, snapNode, alignNodes, distributeNodes, depths, forceLayout, arrange, declutter, fillLayout, foldBox, unfoldBox, parseCSV, toGraphML, toGEXF, seedVazio, seedRedeLivre, seedRedeUnica, seedComparativo, seedCadeia, baseState } from "./lib.js";
 
 // id único mesmo para cadastros no mesmo milissegundo (Date.now() sozinho colide)
 const uid = (prefix) => prefix + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 7);
@@ -530,11 +530,6 @@ table.cent{border-collapse:collapse;width:100%;font-size:12px} table.cent th{tex
     return () => window.removeEventListener("keydown", h);
   }, [deleteSelected, undo, redo, state.nodes, active]);
 
-  const LS_KEY = "tar_editor_autosave_v2";
-  const savedPayloadRef = useRef(null);
-  const skipFirstSave = useRef(true);
-  const storageOkRef = useRef(true);
-  const [hasSaved, setHasSaved] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [tour, setTour] = useState(-1);
   const [spot, setSpot] = useState(null);
@@ -554,30 +549,9 @@ table.cent{border-collapse:collapse;width:100%;font-size:12px} table.cent th{tex
   }, [tour, viewMode]);
   useEffect(() => { /* introdução agora é feita pelo Tutorial do Enlace; este tour continua acessível pela Ajuda */ }, []);
   useEffect(() => { if (!showHelp) return; const h = (e) => { if (e.key === "Escape") setShowHelp(false); }; window.addEventListener("keydown", h); return () => window.removeEventListener("keydown", h); }, [showHelp]);
-  useEffect(() => {
-    try { const raw = window.localStorage.getItem(LS_KEY); if (raw) { const o = JSON.parse(raw); if (o && o.nodes && o.edges) { savedPayloadRef.current = o; setHasSaved(true); } } } catch { storageOkRef.current = false; }
-  }, []);
-  useEffect(() => {
-    if (skipFirstSave.current) { skipFirstSave.current = false; return; }
-    const t = setTimeout(() => { try { window.localStorage.setItem(LS_KEY, JSON.stringify({ ...stateRef.current, __relatos: relatos })); storageOkRef.current = true; } catch { storageOkRef.current = false; } }, 700);
-    return () => clearTimeout(t);
-  }, [state, relatos]);
-  useEffect(() => {
-    const h = (e) => { if (!storageOkRef.current && (stateRef.current.nodes.length || stateRef.current.edges.length)) { e.preventDefault(); e.returnValue = ""; } };
-    window.addEventListener("beforeunload", h);
-    return () => window.removeEventListener("beforeunload", h);
-  }, []);
-  const carregarSalvo = () => {
-    const o = savedPayloadRef.current; if (!o) { setHasSaved(false); return; }
-    const { __relatos, ...d } = o;
-    if (Array.isArray(__relatos)) { setRelatos(__relatos); setActiveRelato(null); }
-    mut(() => ({ regions: [], showNature: true, showSources: true, maxW: 170, ...d }));
-    setSelNodes([]); setSelEdge(null); setSelRegion(null); setHasSaved(false);
-  };
-  const descartarSalvo = () => {
-    try { window.localStorage.removeItem(LS_KEY); } catch {}
-    savedPayloadRef.current = null; setHasSaved(false);
-  };
+  // nada vai para o navegador; só avisa que há o que salvar (o aviso ao fechar fica no App)
+  useMarcarAlterado(state);
+  useMarcarAlterado(relatos);
   useEffect(() => {
     SUITE.getTar = () => ({ ...stateRef.current, __relatos: relatos });
     SUITE.setTar = (data) => {
@@ -741,8 +715,6 @@ table.cent{border-collapse:collapse;width:100%;font-size:12px} table.cent th{tex
         <span id="tour-save" style={{ display: "inline-block" }}>
           <Menu label="Projeto" title="salvar, abrir e limpar" btnStyle={ui.mini}>
             {(close) => (<>
-              {hasSaved && <MenuItem onClick={() => { carregarSalvo(); close(); }}>Continuar de onde parei</MenuItem>}
-              {hasSaved && <MenuItem onClick={() => { descartarSalvo(); close(); }}>Descartar salvo</MenuItem>}
               <MenuItem onClick={() => { exportJSON(); close(); }}>Salvar projeto (.json)</MenuItem>
               <MenuItem onClick={() => { fileRef.current?.click(); close(); }}>Abrir projeto (.json)</MenuItem>
               <MenuItem onClick={() => { csvRef.current?.click(); close(); }}>Importar CSV (associações)</MenuItem>

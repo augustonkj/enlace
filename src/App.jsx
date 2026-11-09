@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { SUITE, useModalTrap, Menu, MenuItem, migrarChaveAntiga } from "./lib.js";
+import { SUITE, useModalTrap, Menu, MenuItem, marcarSalvo, haAlteracoes } from "./lib.js";
 import { EditorTAR } from "./EditorTAR.jsx";
 import { AnaliseQualitativa } from "./AnaliseQualitativa.jsx";
 import { AnaliseQuantitativa } from "./AnaliseQuantitativa.jsx";
@@ -25,8 +25,15 @@ export default function App() {
   const showTar = tool === "qual" && qualSub === "tar";
   const finishTourQ = () => { setTourQ(-1); try { window.localStorage.setItem("enlace_tour_done", "1"); } catch {} };
   useEffect(() => {
-    migrarChaveAntiga("qualmap_tour_done", "enlace_tour_done"); // nome antigo do programa
     try { if (!window.localStorage.getItem("enlace_tour_done")) setTourQ(0); } catch {}
+  }, []);
+  // nada fica no navegador: se houver alterações desde o último "Salvar Enlace",
+  // o navegador pergunta antes de fechar ou recarregar (o texto da janela é do
+  // próprio navegador; nenhum deles deixa a página escolher a mensagem)
+  useEffect(() => {
+    const h = (e) => { if (haAlteracoes()) { e.preventDefault(); e.returnValue = ""; return ""; } };
+    window.addEventListener("beforeunload", h);
+    return () => window.removeEventListener("beforeunload", h);
   }, []);
   useEffect(() => { if (tourQ < 0) return; const st = TOURQ[tourQ]; if (!st) return; if (st.tool && tool !== st.tool) setTool(st.tool); if (st.sub) setQualSub(st.sub); }, [tourQ]);
   const miniBtn = { border: "1px solid #cfd6dd", background: "#fff", color: "#46555f", borderRadius: 6, padding: "6px 12px", fontSize: 12.5, cursor: "pointer", fontWeight: 600 };
@@ -50,6 +57,7 @@ export default function App() {
       const u = URL.createObjectURL(blob); const a = document.createElement("a");
       a.href = u; a.download = `enlace-${new Date().toISOString().slice(0, 10)}.json`; a.click();
       setTimeout(() => URL.revokeObjectURL(u), 1500);
+      marcarSalvo();
       setMsg("projeto do Enlace salvo"); setTimeout(() => setMsg(""), 2500);
     } catch (e) { setMsg("falha ao salvar"); setTimeout(() => setMsg(""), 2500); }
   };
@@ -59,14 +67,16 @@ export default function App() {
     r.onload = async () => {
       try {
         const o = JSON.parse(String(r.result));
-        // __qualmap: arquivos salvos quando o programa tinha o nome antigo
-        if (!o || !(o.__enlace || o.__qualmap)) { setMsg("este arquivo não é um projeto do Enlace"); setTimeout(() => setMsg(""), 3000); return; }
+        // arquivos de versões antigas não têm o marcador __enlace: reconhece pela estrutura
+        const pareceProjeto = o && typeof o === "object" && ["tar", "qual", "geral", "revisao", "quant"].some((k) => o[k] && typeof o[k] === "object");
+        if (!o || !(o.__enlace || pareceProjeto)) { setMsg("este arquivo não é um projeto do Enlace"); setTimeout(() => setMsg(""), 3000); return; }
         if (!window.confirm("Abrir este projeto vai substituir o trabalho atual em todas as janelas. Continuar?")) { setMsg(""); return; }
         if (o.tar && SUITE.setTar) SUITE.setTar(o.tar);
         if (o.qual && SUITE.setQual) await SUITE.setQual(o.qual);
         if (o.geral && SUITE.setGeral) SUITE.setGeral(o.geral);
         if (o.revisao && SUITE.setRevisao) SUITE.setRevisao(o.revisao);
         if (o.quant && SUITE.setQuant) SUITE.setQuant(o.quant);
+        marcarSalvo(1500); // o que acabou de ser aberto já está no arquivo
         setMsg("projeto do Enlace restaurado"); setTimeout(() => setMsg(""), 2500);
       } catch (e) { setMsg("não foi possível abrir o arquivo"); setTimeout(() => setMsg(""), 3000); }
     };
@@ -179,7 +189,7 @@ export default function App() {
               O Enlace reúne três janelas para pesquisa qualitativa e quantitativa. A Análise Qualitativa abriga três ferramentas: Texto (codificação em códigos e categorias), Revisão (tabela de referências e diagrama do fluxo da seleção, no formato PRISMA) e Ator-Rede (a rede de actantes da Teoria Ator-Rede, em tabela e em diagrama). Ao lado ficam o Mapa conceitual e a Análise Quantitativa (testes estatísticos).
             </p>
             <p style={{ margin: "0 0 10px", fontSize: 13.5, color: "#46555f", lineHeight: 1.6 }}>
-              Funciona offline, no navegador ou como aplicativo de desktop, e o trabalho é salvo num único arquivo.
+              Funciona offline, no navegador ou como aplicativo de desktop. Nada é gravado no navegador: o trabalho é salvo num único arquivo, e a página avisa antes de fechar se houver alterações não salvas.
             </p>
 
             <h3 style={{ margin: "18px 0 8px", fontSize: 13, color: "#1f7a8c", textTransform: "uppercase", letterSpacing: ".5px" }}>Desenvolvedores</h3>

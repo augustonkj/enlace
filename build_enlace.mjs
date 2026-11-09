@@ -13,8 +13,7 @@
  *   1) faz o bundle de src/main.jsx com esbuild (resolve os imports do src/ e
  *      empacota react, react-dom e recharts direto no bundle — sem UMD avulso);
  *   2) embute o mammoth como UMD (continua sendo usado como window.mammoth);
- *   3) injeta o shim window.storage (localStorage) usado pela persistência;
- *   4) escreve um HTML único, offline, que abre por duplo clique.
+ *   3) escreve um HTML único, offline, que abre por duplo clique.
  */
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -75,7 +74,6 @@ const html = `<!doctype html>
 <div id="rootapp"><div id="loadmsg">Carregando o Enlace...</div></div><pre id="errbox" role="alert"></pre>
 <script>
 window.addEventListener("error",function(e){var b=document.getElementById("errbox");if(b){b.style.display="block";b.textContent="Erro:\\n"+(e.message||e.error||e)+"\\n"+((e.error&&e.error.stack)||"");}});
-window.storage=window.storage||{get:async(k)=>{const v=localStorage.getItem(k);return v==null?null:{key:k,value:v};},set:async(k,v)=>{localStorage.setItem(k,String(v));return{key:k,value:v};},delete:async(k)=>{localStorage.removeItem(k);return{key:k,deleted:true};},list:async(p="")=>{const keys=[];for(let i=0;i<localStorage.length;i++){const kk=localStorage.key(i);if(kk.indexOf(p)===0)keys.push(kk);}return{keys};}};
 </script>
 <script>${mammoth}</script>
 <script>try{ ${app} }catch(e){var b=document.getElementById("errbox");if(b){b.style.display="block";b.textContent="Erro ao iniciar o app:\\n"+(e.message||e)+"\\n"+(e.stack||"");}var l=document.getElementById("loadmsg");if(l)l.textContent="";}</script>

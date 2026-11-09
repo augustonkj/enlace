@@ -10,7 +10,7 @@ function boxStats(a) {
   return { q1, med, q3, lo, hi, min: v[0], max: v[n - 1] };
 }
 import * as ST from "./stats.js";
-import { salvarLocal, AvisoArmazenamento, migrarChaveAntiga, SUITE } from "./lib.js";
+import { useMarcarAlterado, SUITE } from "./lib.js";
 
 const PALETTES = {
   "Padrão": ["#1f7a8c", "#7a5ea8", "#2e7d4f", "#b06a1f", "#c0392b", "#16a085"],
@@ -37,7 +37,6 @@ function histogram(x, nbins = 8) {
   Inspirado nos tópicos do livro de Moreira. Matemática em stats.js.
 */
 
-const LSK = "enlace_quant_v2";
 
 // catálogo de testes. impl=false => no roteiro (ainda não implementado).
 const TESTS = [
@@ -352,7 +351,6 @@ function textToGrid(text) {
 
 function AnaliseQuantitativa({ active = true }) {
   const [grid, setGrid] = useState(() => emptyGrid());
-  const [erroLocal, setErroLocal] = useState(null);
   const [err, setErr] = useState("");
   const [testKey, setTestKey] = useState("describe");
   const [vars, setVars] = useState({});      // seleções: {num, num2, group, cat1, cat2, items:[]}
@@ -530,9 +528,8 @@ function AnaliseQuantitativa({ active = true }) {
     w.document.open(); w.document.write(doc); w.document.close();
   };
 
-  // restaurar / autosave (grade)
-  useEffect(() => { migrarChaveAntiga("qualmap_quant_v2", LSK); try { const s = window.localStorage.getItem(LSK); if (s) { const o = JSON.parse(s); if (o && o.grid && Array.isArray(o.grid.headers)) setGrid(o.grid); } } catch {} }, []);
-  useEffect(() => { const t = setTimeout(() => { const r = salvarLocal(LSK, JSON.stringify({ grid })); setErroLocal(r.ok ? null : r); }, 600); return () => clearTimeout(t); }, [grid]);
+  // nada vai para o navegador; só avisa que há o que salvar
+  useMarcarAlterado(grid);
   // expõe a Análise Quantitativa ao Salvar/Abrir do Enlace (App.jsx)
   const quantRef = useRef({});
   quantRef.current = { grid, testKey, vars, mu0, conf, hMoses };
@@ -916,7 +913,6 @@ function AnaliseQuantitativa({ active = true }) {
 
   return (
     <div style={T.page}>
-      <AvisoArmazenamento erro={erroLocal} onSalvar={exportPDF} rotuloSalvar="Gerar relatório agora" />
       <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
         <h2 style={T.h2}>Análise Quantitativa</h2>
         <div style={{ flex: 1 }} />

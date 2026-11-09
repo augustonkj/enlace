@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
-import { wrapText, esc, SUITE, Menu, MenuItem, salvarLocal, AvisoArmazenamento, migrarChaveAntiga } from "./lib.js";
+import { wrapText, esc, SUITE, Menu, MenuItem, useMarcarAlterado } from "./lib.js";
 
 /*
   Mapa conceitual — nós e ligações rotuladas, sem as regras da Teoria Ator-Rede.
@@ -227,7 +227,6 @@ function DiagramaGeral({ active = true }) {
   const [past, setPast] = useState([]); const [future, setFuture] = useState([]);
   const [sels, setSels] = useState([]);        // ids dos nós selecionados
   const [selEdge, setSelEdge] = useState(null);
-  const [erroLocal, setErroLocal] = useState(null);
   const [mode, setMode] = useState("select");  // "select" | "connect"
   const [connectFrom, setConnectFrom] = useState(null);
   const [grade, setGrade] = useState(0);       // 0 = sem grade; senão o passo
@@ -246,14 +245,7 @@ function DiagramaGeral({ active = true }) {
     SUITE.setGeral = (data) => { if (data && Array.isArray(data.nodes)) { pushHist(); setStateRaw({ nodes: data.nodes, edges: data.edges || [] }); setSels([]); setSelEdge(null); } }; // pushHist: diagrama anterior recuperável com Ctrl+Z
     return () => { SUITE.getGeral = null; SUITE.setGeral = null; };
   }, []);
-  useEffect(() => {
-    const t = setTimeout(() => { const r = salvarLocal("enlace_geral_v2", JSON.stringify(state)); setErroLocal(r.ok ? null : r); }, 600);
-    return () => clearTimeout(t);
-  }, [state]);
-  useEffect(() => {
-    migrarChaveAntiga("qualmap_geral_v2", "enlace_geral_v2");
-    try { const s = window.localStorage.getItem("enlace_geral_v2"); if (s) { const o = JSON.parse(s); if (o && Array.isArray(o.nodes)) setStateRaw({ nodes: o.nodes, edges: o.edges || [] }); } } catch {}
-  }, []);
+  useMarcarAlterado(state); // nada vai para o navegador; só avisa que há o que salvar
 
   const geo = useMemo(() => geometry(state), [state]);
 
@@ -397,7 +389,6 @@ function DiagramaGeral({ active = true }) {
 
   return (
     <div style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif", background: "#eef1f4", minHeight: "100%", display: "flex", flexDirection: "column" }}>
-      <AvisoArmazenamento erro={erroLocal} onSalvar={exportJSON} />
       <div style={{ display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap", padding: "9px 12px", background: "#fff", borderBottom: "1px solid #dde3e9" }}>
         <strong style={{ fontSize: 15, marginRight: 4 }}>Mapa conceitual</strong>
         <span style={divisor} />

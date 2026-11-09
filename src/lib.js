@@ -180,7 +180,7 @@ const HELP = [
   ] },
   { h: "Salvar e compartilhar", items: [
     ["Salvar / Abrir projeto", "arquivo .json com tudo (actantes, categorias, associações, relatos). É o que você guarda e compartilha para continuar editando."],
-    ["Autosave", "salva sozinho no navegador; ao reabrir, use \u201cContinuar de onde parei\u201d. \u201cDescartar salvo\u201d limpa esse autosave."],
+    ["Nada fica no navegador", "o trabalho só existe enquanto a página está aberta. Salve o arquivo antes de fechar — se houver alterações não salvas, o navegador pergunta antes de sair."],
     ["SVG / PNG", "a figura para publicar."],
     ["GraphML / GEXF", "para Gephi e outros softwares de rede."],
   ] },
@@ -192,7 +192,7 @@ const TOUR = [
   { t: "Inserir e ligar", b: "Na seção Inserir, clique num tipo (mediador, intermediário, OPP…) para criar a caixa, use \u201cLigar nós\u201d para conectar e \u201cOrganizar em rede\u201d para acomodar tudo.", view: "diagrama", target: "tour-ins" },
   { t: "Categorizar", b: "Na aba Análise você cadastra e categoriza os actantes (tipo, natureza, estabilização) e as associações em tabelas. Tudo alimenta o diagrama.", view: "analise", target: "tour-analise" },
   { t: "Análise quantitativa", b: "Aqui também ficam o resumo, o grau (centralidade), a intermediação, os componentes e os gráficos. Dá para exportar CSV e gerar um relatório em PDF.", view: "analise", target: "tour-analise" },
-  { t: "Salvar", b: "O trabalho é salvo sozinho no navegador. Para guardar fora ou compartilhar, use \u201cSalvar projeto\u201d (.json). O botão ? Ajuda abre o guia completo a qualquer hora.", target: "tour-save" },
+  { t: "Salvar", b: "Nada fica gravado no navegador: para guardar ou compartilhar, use \u201cSalvar projeto\u201d (.json). O botão ? Ajuda abre o guia completo a qualquer hora.", target: "tour-save" },
 ];
 function Hint({ text }) {
   const [open, setOpen] = useState(false);
@@ -1063,91 +1063,23 @@ function baseState(nodes, edges, twoPanel, ta, tb, sa, sb) {
 
 
 /* ============================================================
-   Armazenamento local: gravar sabendo se deu certo.
+   Nada é gravado no navegador.
 
-   O navegador reserva cerca de 5 MB por origem para o localStorage. Quando
-   estoura, o setItem LANÇA — e, se ninguém olhar, o app segue dizendo que
-   salvou enquanto o trabalho se perde. Com corpus de várias entrevistas isso
-   deixou de ser hipótese. Daqui para frente toda gravação devolve {ok}, e quem
-   chama é obrigado a decidir o que mostrar.
+   O trabalho vive só na memória da página enquanto ela está aberta; o único
+   lugar onde ele fica guardado é o arquivo que o usuário salva. Para não
+   perder nada por descuido, cada janela avisa quando algo mudou
+   (marcarAlterado) e, se houver mudança desde o último "Salvar Enlace", o
+   navegador pergunta antes de fechar ou recarregar a página.
    ============================================================ */
-const LIMITE_LOCAL = 5 * 1024 * 1024; // cota típica por origem
-
-function salvarLocal(chave, texto) {
-  try {
-    window.localStorage.setItem(chave, String(texto));
-    return { ok: true };
-  } catch (e) {
-    const cheio = !!e && (e.name === "QuotaExceededError" || e.name === "NS_ERROR_DOM_QUOTA_REACHED" || e.code === 22 || e.code === 1014);
-    return { ok: false, cheio, erro: (e && (e.message || e.name)) || String(e) };
-  }
-}
-
-/* Chaves gravadas quando o programa se chamava QualMap. Em vez de ler as duas
-   para sempre, migra uma vez: copia para o nome novo e apaga a antiga. Quem já
-   usava não perde nada e, depois da primeira abertura, o nome antigo some do
-   navegador. (O marcador __qualmap dentro dos arquivos .json salvos continua
-   sendo aceito na abertura — esses arquivos estão no computador do usuário e
-   podem ser abertos daqui a anos.) */
-function migrarChaveAntiga(antiga, nova) {
-  try {
-    const ls = window.localStorage;
-    const velho = ls.getItem(antiga);
-    if (velho == null) return false;
-    if (ls.getItem(nova) == null) { const r = salvarLocal(nova, velho); if (!r.ok) return false; }
-    ls.removeItem(antiga);
-    return true;
-  } catch (e) {
-    return false;
-  }
-}
-
-// quanto já foi ocupado (aproximado: 2 bytes por caractere, como o UTF-16 do navegador)
-function usoLocal() {
-  try {
-    const ls = window.localStorage;
-    let bytes = 0;
-    for (let i = 0; i < ls.length; i++) {
-      const k = ls.key(i);
-      bytes += (k.length + (ls.getItem(k) || "").length) * 2;
-    }
-    return { bytes, limite: LIMITE_LOCAL, fracao: bytes / LIMITE_LOCAL };
-  } catch (e) {
-    return null;
-  }
-}
-
-const formatarBytes = (b) => (b >= 1024 * 1024 ? (b / 1024 / 1024).toFixed(1).replace(".", ",") + " MB" : Math.round(b / 1024) + " KB");
-
-/* Faixa de aviso usada por todas as janelas. `erro` vem da gravação que falhou;
-   `onSalvar` é o caminho de saída (exportar o arquivo) — nunca mostramos o
-   problema sem oferecer a ação que salva o trabalho. */
-function AvisoArmazenamento({ erro, onSalvar, rotuloSalvar = "Salvar arquivo agora" }) {
-  const uso = usoLocal();
-  const perto = !erro && uso && uso.fracao >= 0.7;
-  if (!erro && !perto) return null;
-  const vermelho = !!erro;
-  return (
-    <div role="alert" style={{
-      display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap",
-      padding: "7px 12px", fontSize: 12.5, lineHeight: 1.5,
-      background: vermelho ? "#fbeae7" : "#fdf6e7", color: vermelho ? "#8c2f21" : "#7a5a12",
-      borderBottom: `1px solid ${vermelho ? "#f0c8c0" : "#efdfb6"}`,
-    }}>
-      <span style={{ fontWeight: 700 }}>{vermelho ? "⚠ o trabalho NÃO foi salvo no navegador" : "⚠ a memória do navegador está quase cheia"}</span>
-      <span>
-        {vermelho
-          ? (erro.cheio ? "A memória do navegador encheu." : "O navegador recusou a gravação.") + " Salve num arquivo agora para não perder nada."
-          : `${formatarBytes(uso.bytes)} de ~${formatarBytes(uso.limite)} usados. Quando encher, o salvamento automático para de funcionar.`}
-      </span>
-      {onSalvar && (
-        <button onClick={onSalvar} style={{
-          border: "none", borderRadius: 5, padding: "4px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer",
-          background: vermelho ? "#b3402f" : "#8a6d1f", color: "#fff",
-        }}>{rotuloSalvar}</button>
-      )}
-    </div>
-  );
+let alterado = false;
+let silenciarAte = 0; // logo após abrir um projeto, as janelas se re-renderizam: isso não é edição
+function marcarAlterado() { if (Date.now() >= silenciarAte) alterado = true; }
+function marcarSalvo(silenciarMs = 0) { alterado = false; silenciarAte = Date.now() + silenciarMs; }
+function haAlteracoes() { return alterado; }
+// marca alteração quando `valor` muda — menos na primeira renderização
+function useMarcarAlterado(valor) {
+  const primeiro = useRef(true);
+  useEffect(() => { if (primeiro.current) { primeiro.current = false; return; } marcarAlterado(); }, [valor]);
 }
 
 
@@ -1217,4 +1149,4 @@ function BarrasH({ dados, largRotulo = 150, corPadrao = "#1f7a8c", alturaBarra =
 
 function setSizeCtx(v) { SIZE_CTX = v; }
 
-export { migrarChaveAntiga, BarrasH, escalaBonita, numBR, salvarLocal, usoLocal, formatarBytes, AvisoArmazenamento, VW, VH, SNAP_T, setDims, setSizeCtx, SUITE, useModalTrap, C, NODE_TYPES, TYPE_ORDER, MOMENTS, MOMENT_ORDER, NAT_LBL, ESTAB_LBL, KIND_LBL, brandes, parseCSVfull, csvNorm, colIdx, HELP, TOUR, Hint, Menu, MenuItem, REGION_COLORS, wrapText, sizeOf, degreeMap, clipToRect, distToSeg, qPoint, esc, edgeGeometry, arrowHead, barrierBar, estabBadge, scriptGlyph, calcGlyph, sourceLetter, sourceMark, nodeBody, buildInner, legendMetaFor, snapNode, alignNodes, distributeNodes, depths, forceLayout, arrange, declutter, fillLayout, foldBox, unfoldBox, parseCSV, toGraphML, toGEXF, seedVazio, seedRedeLivre, seedRedeUnica, seedComparativo, seedCadeia, baseState };
+export { marcarAlterado, marcarSalvo, haAlteracoes, useMarcarAlterado, BarrasH, escalaBonita, numBR, VW, VH, SNAP_T, setDims, setSizeCtx, SUITE, useModalTrap, C, NODE_TYPES, TYPE_ORDER, MOMENTS, MOMENT_ORDER, NAT_LBL, ESTAB_LBL, KIND_LBL, brandes, parseCSVfull, csvNorm, colIdx, HELP, TOUR, Hint, Menu, MenuItem, REGION_COLORS, wrapText, sizeOf, degreeMap, clipToRect, distToSeg, qPoint, esc, edgeGeometry, arrowHead, barrierBar, estabBadge, scriptGlyph, calcGlyph, sourceLetter, sourceMark, nodeBody, buildInner, legendMetaFor, snapNode, alignNodes, distributeNodes, depths, forceLayout, arrange, declutter, fillLayout, foldBox, unfoldBox, parseCSV, toGraphML, toGEXF, seedVazio, seedRedeLivre, seedRedeUnica, seedComparativo, seedCadeia, baseState };
