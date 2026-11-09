@@ -114,14 +114,15 @@ npm test              # só roda (usa o Enlace.html já construído)
 node testes/03-corpus.mjs   # uma suíte sozinha, com o detalhe de cada passo
 ```
 As suítes em `testes/` carregam o **arquivo único já construído** num DOM
-(jsdom) e clicam na interface como um usuário: trocam de aba, carregam os
-exemplos, importam arquivos, editam células e conferem os números que aparecem
-na tela. São 132 verificações cobrindo a estrutura das janelas, a revisão com
+(jsdom) e clicam na interface como um usuário: trocam de aba, abrem projetos
+de `testes/fixtures/` pelo botão Abrir (a Análise Qualitativa não tem mais
+exemplos embutidos), importam arquivos, editam células e conferem os números
+que aparecem na tela. São 143 verificações cobrindo a estrutura das janelas, a revisão com
 PRISMA, o corpus de vários documentos, a ida e volta do REFI-QDA, a busca no
 corpus, o comportamento quando o navegador recusa gravar (`07-armazenamento.mjs` finge a cota estourando) e os 11 tipos de
 gráfico da janela quantitativa (`09-graficos.mjs`, caracterização feita para
-proteger a saída do recharts), a migração das chaves do nome antigo e as
-opções do mapa conceitual.
+proteger a saída do recharts), a migração das chaves do nome antigo, as
+opções do mapa conceitual e o seletor de documentos da Codificação.
 
 O que o jsdom **não** alcança está anotado dentro dos arquivos: ele não faz
 layout (então `getBoundingClientRect` devolve zeros e cliques por coordenada no

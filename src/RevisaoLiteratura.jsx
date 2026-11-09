@@ -37,41 +37,6 @@ function emptyRevisao() {
   };
 }
 
-function seedRevisao() {
-  const r = (autores, ano, titulo, veiculo, base, etapa, motivo, tags) =>
-    ({ id: uid(), autores, ano: String(ano), titulo, veiculo, base, tipo: "artigo", doi: "", link: "", resumo: "", notas: [novaCaixa()], tags: tags || "", etapa, motivo: motivo || "" });
-  return {
-    protocolo: {
-      pergunta: "Como a modelagem matemática tem sido usada no ensino de ciências na educação básica (2015–2025)?",
-      bases: "Scopus, Web of Science, SciELO",
-      strings: '("modelagem matemática" OR "mathematical modelling") AND ("ensino de ciências" OR "science education") AND ("educação básica" OR "K-12")',
-      periodo: "2015–2025",
-      idiomas: "português, inglês e espanhol",
-      inclusao: "pesquisa empírica; educação básica; modelagem matemática como objeto ou estratégia; texto completo disponível",
-      exclusao: "ensaios teóricos sem dados; ensino superior; resumos de evento; duplicatas",
-      registro: "protocolo registrado no OSF (exemplo)",
-      notas: "Exemplo — substitua pelo seu protocolo, suas bases e suas referências.",
-    },
-    refs: [
-      r("Almeida, L. M. W.; Silva, K. P.", 2016, "Modelagem matemática e o ensino de ciências: um estudo em turmas de 9º ano", "Bolema", "Scopus", "incluido", "", "modelagem; anos finais"),
-      r("Barbosa, J. C.", 2015, "Modelagem matemática e os professores: a questão da formação", "Bolema", "Web of Science", "incluido", "", "formação docente"),
-      r("Ferreira, D. H. L.; Jacobini, O. R.", 2018, "Modelagem matemática e educação ambiental no ensino médio", "Ciência & Educação", "SciELO", "incluido", "", "ensino médio"),
-      r("Kaiser, G.; Sriraman, B.", 2019, "A global survey of international perspectives on modelling", "ZDM", "Scopus", "incluido", "", "revisão internacional"),
-      r("Almeida, L. M. W.; Silva, K. P.", 2016, "Modelagem matemática e o ensino de ciências: um estudo em turmas de 9º ano", "Bolema", "Web of Science", "duplicado", "", ""),
-      r("Barbosa, J. C.", 2015, "Modelagem matemática e os professores: a questão da formação", "Bolema", "SciELO", "duplicado", "", ""),
-      r("Blum, W.", 2020, "Quality teaching of mathematical modelling: what do we know?", "Journal of Mathematical Behavior", "Scopus", "excluido_leitura", "não é pesquisa empírica", ""),
-      r("Souza, E. G.; Luna, A. V. A.", 2021, "Modelagem na licenciatura em matemática", "Educação Matemática Pesquisa", "Web of Science", "excluido_leitura", "fora da educação básica", ""),
-      r("Oliveira, A. M.; Campos, C. R.", 2017, "Modelagem e estatística na formação de professores", "Revista de Ensino de Ciências", "SciELO", "excluido_leitura", "fora da educação básica", ""),
-      r("Lima, R. S.", 2019, "Uma proposta de sequência didática com modelagem", "Anais de evento", "Scopus", "excluido_triagem", "resumo de evento", ""),
-      r("Costa, P. F.", 2022, "Machine learning models for student dropout", "Computers & Education", "Scopus", "excluido_triagem", "sentido de 'modelagem' fora do escopo", ""),
-      r("Nunes, T. M.", 2018, "Modelagem no ensino superior de engenharia", "IJEE", "Web of Science", "excluido_triagem", "ensino superior", ""),
-      r("Silva, C. A.", 2020, "Reflexões sobre modelagem e currículo", "Revista Brasileira de Educação", "SciELO", "excluido_triagem", "ensaio teórico", ""),
-      r("Martins, H. P.", 2017, "Modelagem matemática em escolas rurais", "Periódico regional", "SciELO", "nao_recuperado", "texto completo indisponível", ""),
-    ],
-    over: {},
-  };
-}
-
 // ---------- contagens ----------
 function contagens(state) {
   const refs = state.refs;
@@ -457,11 +422,10 @@ function RevisaoLiteratura({ active = true }) {
             <MenuItem onClick={() => { exportSVG(); close(); }}>Diagrama SVG</MenuItem>
           </>)}
         </Menu>
-        <Menu label="Projeto" btnStyle={mini} title="salvar, abrir, exemplo e limpar">
+        <Menu label="Projeto" btnStyle={mini} title="salvar, abrir e limpar">
           {(close) => (<>
             <MenuItem onClick={() => { exportJSON(); close(); }}>Salvar (.json)</MenuItem>
             <MenuItem onClick={() => { jsonRef.current?.click(); close(); }}>Abrir (.json)</MenuItem>
-            <MenuItem onClick={() => { mut(() => seedRevisao()); setSel(null); close(); }}>Carregar exemplo</MenuItem>
             <MenuItem danger onClick={() => { mut(() => emptyRevisao()); setSel(null); close(); }}>Limpar tudo</MenuItem>
           </>)}
         </Menu>
@@ -522,7 +486,7 @@ function RevisaoLiteratura({ active = true }) {
                       </tr>
                     );
                   })}
-                  {!refsFiltradas.length && <tr><td colSpan={8} style={{ padding: 14, fontSize: 12.5, color: "#9aa7b2" }}>Nenhuma referência {state.refs.length ? "com esse filtro" : "ainda — use + Referência, Importar ou Projeto ▾ · Carregar exemplo"}.</td></tr>}
+                  {!refsFiltradas.length && <tr><td colSpan={8} style={{ padding: 14, fontSize: 12.5, color: "#9aa7b2" }}>Nenhuma referência {state.refs.length ? "com esse filtro" : "ainda — use + Referência, Importar ou Projeto ▾ · Abrir"}.</td></tr>}
                 </tbody>
               </table>
             </div>
@@ -610,4 +574,4 @@ function RevisaoLiteratura({ active = true }) {
   );
 }
 
-export { RevisaoLiteratura, buildRevisaoSVG, seedRevisao, contagens, acharDuplicados, deBibTeX, deRIS, deCSV };
+export { RevisaoLiteratura, buildRevisaoSVG, contagens, acharDuplicados, deBibTeX, deRIS, deCSV };

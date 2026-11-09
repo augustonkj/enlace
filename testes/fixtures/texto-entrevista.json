@@ -1,0 +1,157 @@
+{
+ "name": "Entrevista (trabalho remoto)",
+ "text": "ENTREVISTA — Experiência de trabalho remoto\n(participante: profissional, 34 anos; entrevista semiestruturada)\n\nEntrevistador: Como foi para você começar a trabalhar de casa?\nParticipante: No começo foi confuso. Eu não tinha um espaço só para o trabalho, então usava a mesa da cozinha. A internet caía toda hora e eu perdia parte das reuniões, o que me deixava ansioso. Levei umas três semanas para criar uma rotina que funcionasse.\n\nEntrevistador: E o contato com os colegas, como ficou?\nParticipante: Senti muita falta da convivência. Antes a gente resolvia as coisas no corredor, rápido. De casa, tudo virava mensagem ou reunião marcada, e eu me senti bastante isolado, principalmente nas primeiras semanas.\n\nEntrevistador: Teve algum ponto positivo?\nParticipante: Sim, vários. Economizei o tempo do deslocamento, que antes eram duas horas por dia, e consegui organizar meu trabalho no meu próprio ritmo. Passei a almoçar com a minha família, coisa que não acontecia havia anos. Essa flexibilidade foi o que mais valorizei.\n\nEntrevistador: E as dificuldades continuaram?\nParticipante: Algumas sim. Como o computador estava sempre ali, eu acabava trabalhando além da hora, respondendo mensagem à noite. Eram tarefas demais e eu passava o dia inteiro na tela. No fim de alguns meses eu estava exausto, mesmo gostando da liberdade que o modelo trouxe.\n\nEntrevistador: Olhando para trás, o que você mudaria?\nParticipante: Eu definiria horários mais claros desde o início e combinaria com a equipe momentos fixos para conversar. O problema não foi o trabalho remoto em si, mas a falta de combinados.",
+ "codes": [
+  {
+   "id": "c1",
+   "name": "Dificuldade técnica",
+   "color": "#c0392b",
+   "desc": "internet, equipamento, espaço de trabalho"
+  },
+  {
+   "id": "c2",
+   "name": "Adaptação",
+   "color": "#d35400",
+   "desc": "criar rotina, ajustar-se ao novo modelo"
+  },
+  {
+   "id": "c3",
+   "name": "Isolamento",
+   "color": "#e74c3c",
+   "desc": "falta de convívio e troca informal"
+  },
+  {
+   "id": "c4",
+   "name": "Flexibilidade",
+   "color": "#e67e22",
+   "desc": "tempo, deslocamento, família"
+  },
+  {
+   "id": "c5",
+   "name": "Autonomia",
+   "color": "#b7950b",
+   "desc": "organizar o próprio trabalho"
+  },
+  {
+   "id": "c6",
+   "name": "Sobrecarga",
+   "color": "#27ae60",
+   "desc": "excesso de jornada e de tela"
+  }
+ ],
+ "excerpts": [
+  {
+   "id": "e1",
+   "start": 285,
+   "end": 341,
+   "text": "A internet caía toda hora e eu perdia parte das reuniões",
+   "codeIds": [
+    "c1"
+   ],
+   "memo": "problema de acesso"
+  },
+  {
+   "id": "e2",
+   "start": 369,
+   "end": 414,
+   "text": "Levei umas três semanas para criar uma rotina",
+   "codeIds": [
+    "c2"
+   ],
+   "memo": ""
+  },
+  {
+   "id": "e3",
+   "start": 645,
+   "end": 708,
+   "text": "me senti bastante isolado, principalmente nas primeiras semanas",
+   "codeIds": [
+    "c3"
+   ],
+   "memo": ""
+  },
+  {
+   "id": "e4",
+   "start": 780,
+   "end": 849,
+   "text": "Economizei o tempo do deslocamento, que antes eram duas horas por dia",
+   "codeIds": [
+    "c4"
+   ],
+   "memo": ""
+  },
+  {
+   "id": "e5",
+   "start": 853,
+   "end": 905,
+   "text": "consegui organizar meu trabalho no meu próprio ritmo",
+   "codeIds": [
+    "c5"
+   ],
+   "memo": ""
+  },
+  {
+   "id": "e6",
+   "start": 981,
+   "end": 1024,
+   "text": "Essa flexibilidade foi o que mais valorizei",
+   "codeIds": [
+    "c4"
+   ],
+   "memo": "valor central para o participante"
+  },
+  {
+   "id": "e7",
+   "start": 1137,
+   "end": 1202,
+   "text": "eu acabava trabalhando além da hora, respondendo mensagem à noite",
+   "codeIds": [
+    "c6"
+   ],
+   "memo": ""
+  },
+  {
+   "id": "e8",
+   "start": 1204,
+   "end": 1258,
+   "text": "Eram tarefas demais e eu passava o dia inteiro na tela",
+   "codeIds": [
+    "c6",
+    "c1"
+   ],
+   "memo": "sobrecarga ligada à tela"
+  }
+ ],
+ "categories": [
+  {
+   "id": "k1",
+   "name": "Desafios da transição",
+   "tipo": "emergente",
+   "desc": "o que dificultou a mudança para o remoto",
+   "codeIds": [
+    "c1",
+    "c2",
+    "c3",
+    "c6"
+   ]
+  },
+  {
+   "id": "k2",
+   "name": "Ganhos percebidos",
+   "tipo": "emergente",
+   "desc": "o que o participante passou a valorizar",
+   "codeIds": [
+    "c4",
+    "c5"
+   ]
+  }
+ ],
+ "metatexts": [
+  {
+   "id": "m1",
+   "title": "Desafios da transição",
+   "categoryId": "k1",
+   "body": "Os relatos descrevem uma transição inicialmente custosa para o trabalho remoto: problemas técnicos de acesso, a necessidade de construir uma rotina nova, a perda do convívio informal e, mais adiante, a sobrecarga ligada ao tempo de tela. Este é um rascunho de exemplo: substitua por sua própria interpretação, apoiada nos recortes."
+  }
+ ]
+}

@@ -28,6 +28,14 @@ const pb = (re) => [...vis().querySelectorAll("button")].find((x) => re.test(x.t
 const ptxt = () => vis().textContent.replace(/\s+/g, " ").trim();
 const vals = () => [...vis().querySelectorAll("input")].map((i) => i.value).join(" | ");
 const ok = (c, m) => { console.log((c ? "  ok  " : "  FALHA ") + m); if (!c) process.exitCode = 1; };
+// os exemplos saíram do app: os dados de teste vêm de testes/fixtures, pelo botão Abrir
+const abrirFixture = async (nome, ms) => {
+  const inp = [...vis().querySelectorAll('input[type="file"]')].find((i) => (i.accept || "").includes("json"));
+  const f = new W.File([readFileSync(new URL("./fixtures/" + nome, import.meta.url), "utf8")], nome, { type: "application/json" });
+  Object.defineProperty(inp, "files", { value: [f], configurable: true });
+  inp.dispatchEvent(new W.Event("change", { bubbles: true }));
+  await wait(ms);
+};
 const setInp = (el, v) => { Object.getOwnPropertyDescriptor(W.HTMLInputElement.prototype, "value").set.call(el, v); el.dispatchEvent(new W.Event("input", { bubbles: true })); };
 const setSel = (el, v) => { Object.getOwnPropertyDescriptor(W.HTMLSelectElement.prototype, "value").set.call(el, v); el.dispatchEvent(new W.Event("change", { bubbles: true })); };
 
@@ -35,7 +43,7 @@ await click(nav("Pular"));
 await click(nav("Texto"), 800);
 
 // exemplo (projeto antigo de um texto só) precisa migrar sem perder recortes
-await click(pb(/^Exemplo$/), 1200);
+await abrirFixture("texto-entrevista.json", 1200);
 ok(/Documentos/.test(ptxt()) && /Consultas/.test(ptxt()), "abas Documentos e Consultas aparecem");
 
 await click(nav("Documentos"), 700);
@@ -43,6 +51,7 @@ let linhas = vis().querySelectorAll("tbody tr").length;
 console.log("  documentos após migrar o exemplo:", linhas, "|", vals().slice(0, 80));
 ok(linhas === 1, "projeto antigo virou 1 documento (migração)");
 ok(/8/.test(ptxt()), "os 8 recortes do exemplo sobreviveram à migração");
+ok(/1\.?596/.test(ptxt()), "o texto do arquivo antigo veio junto (1596 caracteres)");
 
 // importar dois documentos de uma vez
 const inputArquivo = [...vis().querySelectorAll('input[type="file"]')].find((i) => (i.accept || "").includes(".txt"));

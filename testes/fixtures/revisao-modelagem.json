@@ -1,0 +1,324 @@
+{
+ "protocolo": {
+  "pergunta": "Como a modelagem matemática tem sido usada no ensino de ciências na educação básica (2015–2025)?",
+  "bases": "Scopus, Web of Science, SciELO",
+  "strings": "(\"modelagem matemática\" OR \"mathematical modelling\") AND (\"ensino de ciências\" OR \"science education\") AND (\"educação básica\" OR \"K-12\")",
+  "periodo": "2015–2025",
+  "idiomas": "português, inglês e espanhol",
+  "inclusao": "pesquisa empírica; educação básica; modelagem matemática como objeto ou estratégia; texto completo disponível",
+  "exclusao": "ensaios teóricos sem dados; ensino superior; resumos de evento; duplicatas",
+  "registro": "protocolo registrado no OSF (exemplo)",
+  "notas": "Exemplo — substitua pelo seu protocolo, suas bases e suas referências."
+ },
+ "refs": [
+  {
+   "id": "rq967ip3",
+   "autores": "Almeida, L. M. W.; Silva, K. P.",
+   "ano": "2016",
+   "titulo": "Modelagem matemática e o ensino de ciências: um estudo em turmas de 9º ano",
+   "veiculo": "Bolema",
+   "base": "Scopus",
+   "tipo": "artigo",
+   "doi": "",
+   "link": "",
+   "resumo": "",
+   "notas": [
+    {
+     "id": "ruvf3c3g",
+     "titulo": "",
+     "texto": ""
+    }
+   ],
+   "tags": "modelagem; anos finais",
+   "etapa": "incluido",
+   "motivo": ""
+  },
+  {
+   "id": "r5u26b2u",
+   "autores": "Barbosa, J. C.",
+   "ano": "2015",
+   "titulo": "Modelagem matemática e os professores: a questão da formação",
+   "veiculo": "Bolema",
+   "base": "Web of Science",
+   "tipo": "artigo",
+   "doi": "",
+   "link": "",
+   "resumo": "",
+   "notas": [
+    {
+     "id": "rybu62c4",
+     "titulo": "",
+     "texto": ""
+    }
+   ],
+   "tags": "formação docente",
+   "etapa": "incluido",
+   "motivo": ""
+  },
+  {
+   "id": "reeyoxi8",
+   "autores": "Ferreira, D. H. L.; Jacobini, O. R.",
+   "ano": "2018",
+   "titulo": "Modelagem matemática e educação ambiental no ensino médio",
+   "veiculo": "Ciência & Educação",
+   "base": "SciELO",
+   "tipo": "artigo",
+   "doi": "",
+   "link": "",
+   "resumo": "",
+   "notas": [
+    {
+     "id": "rj2qiu7l",
+     "titulo": "",
+     "texto": ""
+    }
+   ],
+   "tags": "ensino médio",
+   "etapa": "incluido",
+   "motivo": ""
+  },
+  {
+   "id": "r1nai1uw",
+   "autores": "Kaiser, G.; Sriraman, B.",
+   "ano": "2019",
+   "titulo": "A global survey of international perspectives on modelling",
+   "veiculo": "ZDM",
+   "base": "Scopus",
+   "tipo": "artigo",
+   "doi": "",
+   "link": "",
+   "resumo": "",
+   "notas": [
+    {
+     "id": "rt6eanbq",
+     "titulo": "",
+     "texto": ""
+    }
+   ],
+   "tags": "revisão internacional",
+   "etapa": "incluido",
+   "motivo": ""
+  },
+  {
+   "id": "ragwd8hd",
+   "autores": "Almeida, L. M. W.; Silva, K. P.",
+   "ano": "2016",
+   "titulo": "Modelagem matemática e o ensino de ciências: um estudo em turmas de 9º ano",
+   "veiculo": "Bolema",
+   "base": "Web of Science",
+   "tipo": "artigo",
+   "doi": "",
+   "link": "",
+   "resumo": "",
+   "notas": [
+    {
+     "id": "rju1tr5t",
+     "titulo": "",
+     "texto": ""
+    }
+   ],
+   "tags": "",
+   "etapa": "duplicado",
+   "motivo": ""
+  },
+  {
+   "id": "rvsv9ikm",
+   "autores": "Barbosa, J. C.",
+   "ano": "2015",
+   "titulo": "Modelagem matemática e os professores: a questão da formação",
+   "veiculo": "Bolema",
+   "base": "SciELO",
+   "tipo": "artigo",
+   "doi": "",
+   "link": "",
+   "resumo": "",
+   "notas": [
+    {
+     "id": "r6npm1k7",
+     "titulo": "",
+     "texto": ""
+    }
+   ],
+   "tags": "",
+   "etapa": "duplicado",
+   "motivo": ""
+  },
+  {
+   "id": "rli66hu9",
+   "autores": "Blum, W.",
+   "ano": "2020",
+   "titulo": "Quality teaching of mathematical modelling: what do we know?",
+   "veiculo": "Journal of Mathematical Behavior",
+   "base": "Scopus",
+   "tipo": "artigo",
+   "doi": "",
+   "link": "",
+   "resumo": "",
+   "notas": [
+    {
+     "id": "rna3t3i1",
+     "titulo": "",
+     "texto": ""
+    }
+   ],
+   "tags": "",
+   "etapa": "excluido_leitura",
+   "motivo": "não é pesquisa empírica"
+  },
+  {
+   "id": "rgv054sk",
+   "autores": "Souza, E. G.; Luna, A. V. A.",
+   "ano": "2021",
+   "titulo": "Modelagem na licenciatura em matemática",
+   "veiculo": "Educação Matemática Pesquisa",
+   "base": "Web of Science",
+   "tipo": "artigo",
+   "doi": "",
+   "link": "",
+   "resumo": "",
+   "notas": [
+    {
+     "id": "r4yajejr",
+     "titulo": "",
+     "texto": ""
+    }
+   ],
+   "tags": "",
+   "etapa": "excluido_leitura",
+   "motivo": "fora da educação básica"
+  },
+  {
+   "id": "rdjb4jyq",
+   "autores": "Oliveira, A. M.; Campos, C. R.",
+   "ano": "2017",
+   "titulo": "Modelagem e estatística na formação de professores",
+   "veiculo": "Revista de Ensino de Ciências",
+   "base": "SciELO",
+   "tipo": "artigo",
+   "doi": "",
+   "link": "",
+   "resumo": "",
+   "notas": [
+    {
+     "id": "rv30em48",
+     "titulo": "",
+     "texto": ""
+    }
+   ],
+   "tags": "",
+   "etapa": "excluido_leitura",
+   "motivo": "fora da educação básica"
+  },
+  {
+   "id": "rfbykz94",
+   "autores": "Lima, R. S.",
+   "ano": "2019",
+   "titulo": "Uma proposta de sequência didática com modelagem",
+   "veiculo": "Anais de evento",
+   "base": "Scopus",
+   "tipo": "artigo",
+   "doi": "",
+   "link": "",
+   "resumo": "",
+   "notas": [
+    {
+     "id": "rna2819z",
+     "titulo": "",
+     "texto": ""
+    }
+   ],
+   "tags": "",
+   "etapa": "excluido_triagem",
+   "motivo": "resumo de evento"
+  },
+  {
+   "id": "rmrsq05c",
+   "autores": "Costa, P. F.",
+   "ano": "2022",
+   "titulo": "Machine learning models for student dropout",
+   "veiculo": "Computers & Education",
+   "base": "Scopus",
+   "tipo": "artigo",
+   "doi": "",
+   "link": "",
+   "resumo": "",
+   "notas": [
+    {
+     "id": "rj41d86r",
+     "titulo": "",
+     "texto": ""
+    }
+   ],
+   "tags": "",
+   "etapa": "excluido_triagem",
+   "motivo": "sentido de 'modelagem' fora do escopo"
+  },
+  {
+   "id": "rzghefxc",
+   "autores": "Nunes, T. M.",
+   "ano": "2018",
+   "titulo": "Modelagem no ensino superior de engenharia",
+   "veiculo": "IJEE",
+   "base": "Web of Science",
+   "tipo": "artigo",
+   "doi": "",
+   "link": "",
+   "resumo": "",
+   "notas": [
+    {
+     "id": "rkuyd2u2",
+     "titulo": "",
+     "texto": ""
+    }
+   ],
+   "tags": "",
+   "etapa": "excluido_triagem",
+   "motivo": "ensino superior"
+  },
+  {
+   "id": "ra77sson",
+   "autores": "Silva, C. A.",
+   "ano": "2020",
+   "titulo": "Reflexões sobre modelagem e currículo",
+   "veiculo": "Revista Brasileira de Educação",
+   "base": "SciELO",
+   "tipo": "artigo",
+   "doi": "",
+   "link": "",
+   "resumo": "",
+   "notas": [
+    {
+     "id": "r11gzqua",
+     "titulo": "",
+     "texto": ""
+    }
+   ],
+   "tags": "",
+   "etapa": "excluido_triagem",
+   "motivo": "ensaio teórico"
+  },
+  {
+   "id": "rgdccb04",
+   "autores": "Martins, H. P.",
+   "ano": "2017",
+   "titulo": "Modelagem matemática em escolas rurais",
+   "veiculo": "Periódico regional",
+   "base": "SciELO",
+   "tipo": "artigo",
+   "doi": "",
+   "link": "",
+   "resumo": "",
+   "notas": [
+    {
+     "id": "rbwkmvzn",
+     "titulo": "",
+     "texto": ""
+    }
+   ],
+   "tags": "",
+   "etapa": "nao_recuperado",
+   "motivo": "texto completo indisponível"
+  }
+ ],
+ "over": {}
+}

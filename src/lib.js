@@ -934,37 +934,6 @@ function toGEXF(state) {
 function seedVazio() {
   return baseState([], [], false, "", "", "", "");
 }
-function seedDidatico() {
-  const N = (id, label, x, y, type, ex = {}) => ({ id, label, x, y, type, emph: false, ...ex });
-  const nodes = [
-    N("opp", "Ponto de passagem:\nconseguir terreno e água", 450, 215, "opp", { emph: true }),
-    N("assoc", "Associação de moradores", 165, 115, "mediador", { nat: "humano", estab: "prova" }),
-    N("pref", "Prefeitura", 165, 215, "intermediario", { nat: "humano" }),
-    N("morad", "Moradores", 165, 320, "mediador", { nat: "humano" }),
-    N("irrig", "Sistema de irrigação", 735, 115, "mediador", { nat: "nao", estab: "estab" }),
-    N("manual", "Manual de cultivo", 735, 215, "intermediario", { nat: "nao" }),
-    N("calend", "Calendário de plantio", 450, 100, "caixapreta"),
-    N("sement", "Sementes", 450, 325, "quaseobjeto", { nat: "nao" }),
-    N("cetic", "Vizinhos céticos", 735, 320, "silenciado", { nat: "humano" }),
-  ];
-  const E = (from, to, ex = {}) => ({ id: from + "_" + to, from, to, style: "solida", directed: true, label: "", ...ex });
-  const edges = [
-    E("assoc", "opp", { moment: "problematizacao", label: "problematiza", front: "programa", fonteTipo: "observacao", fonte: "exemplo de uso" }),
-    E("pref", "opp", { moment: "interessamento", label: "interessa" }),
-    E("irrig", "opp", { moment: "interessamento" }),
-    E("opp", "morad", { moment: "alistamento", label: "alista" }),
-    E("opp", "sement", { moment: "mobilizacao", label: "mobiliza" }),
-    E("assoc", "morad", { kind: "porta-voz", label: "fala por" }),
-    E("calend", "morad", { kind: "delegacao", label: "inscreve rotina" }),
-    E("manual", "sement", { kind: "referencia", ganha: "instrução", perde: "improviso" }),
-    E("cetic", "opp", { front: "antiprograma", style: "tracejada", label: "resiste" }),
-  ];
-  const st = baseState(nodes, edges, false,
-    "Exemplo didático: uma rede de tradução (horta comunitária)", "",
-    "Exemplo para explorar o programa: cada tipo de caixa e de ligação aparece aqui. Selecione, mova, edite e troque os tipos para ver o efeito.", "");
-  st.H = 620;
-  return st;
-}
 function seedRedeLivre() {
   const N = (id, label, type, ex = {}) => ({ id, label, type, emph: false, ...ex });
   const defs = [
@@ -1248,4 +1217,4 @@ function BarrasH({ dados, largRotulo = 150, corPadrao = "#1f7a8c", alturaBarra =
 
 function setSizeCtx(v) { SIZE_CTX = v; }
 
-export { migrarChaveAntiga, BarrasH, escalaBonita, numBR, salvarLocal, usoLocal, formatarBytes, AvisoArmazenamento, VW, VH, SNAP_T, setDims, setSizeCtx, SUITE, useModalTrap, C, NODE_TYPES, TYPE_ORDER, MOMENTS, MOMENT_ORDER, NAT_LBL, ESTAB_LBL, KIND_LBL, brandes, parseCSVfull, csvNorm, colIdx, HELP, TOUR, Hint, Menu, MenuItem, REGION_COLORS, wrapText, sizeOf, degreeMap, clipToRect, distToSeg, qPoint, esc, edgeGeometry, arrowHead, barrierBar, estabBadge, scriptGlyph, calcGlyph, sourceLetter, sourceMark, nodeBody, buildInner, legendMetaFor, snapNode, alignNodes, distributeNodes, depths, forceLayout, arrange, declutter, fillLayout, foldBox, unfoldBox, parseCSV, toGraphML, toGEXF, seedVazio, seedDidatico, seedRedeLivre, seedRedeUnica, seedComparativo, seedCadeia, baseState };
+export { migrarChaveAntiga, BarrasH, escalaBonita, numBR, salvarLocal, usoLocal, formatarBytes, AvisoArmazenamento, VW, VH, SNAP_T, setDims, setSizeCtx, SUITE, useModalTrap, C, NODE_TYPES, TYPE_ORDER, MOMENTS, MOMENT_ORDER, NAT_LBL, ESTAB_LBL, KIND_LBL, brandes, parseCSVfull, csvNorm, colIdx, HELP, TOUR, Hint, Menu, MenuItem, REGION_COLORS, wrapText, sizeOf, degreeMap, clipToRect, distToSeg, qPoint, esc, edgeGeometry, arrowHead, barrierBar, estabBadge, scriptGlyph, calcGlyph, sourceLetter, sourceMark, nodeBody, buildInner, legendMetaFor, snapNode, alignNodes, distributeNodes, depths, forceLayout, arrange, declutter, fillLayout, foldBox, unfoldBox, parseCSV, toGraphML, toGEXF, seedVazio, seedRedeLivre, seedRedeUnica, seedComparativo, seedCadeia, baseState };

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useMemo, useEffect, useCallback } from "react";
-import { VW, VH, SNAP_T, setDims, setSizeCtx, SUITE, useModalTrap, C, NODE_TYPES, TYPE_ORDER, MOMENTS, MOMENT_ORDER, NAT_LBL, ESTAB_LBL, KIND_LBL, brandes, parseCSVfull, csvNorm, colIdx, HELP, TOUR, Hint, Menu, MenuItem, REGION_COLORS, wrapText, sizeOf, degreeMap, clipToRect, distToSeg, qPoint, esc, edgeGeometry, arrowHead, barrierBar, estabBadge, scriptGlyph, calcGlyph, sourceLetter, sourceMark, nodeBody, buildInner, legendMetaFor, snapNode, alignNodes, distributeNodes, depths, forceLayout, arrange, declutter, fillLayout, foldBox, unfoldBox, parseCSV, toGraphML, toGEXF, seedVazio, seedDidatico, seedRedeLivre, seedRedeUnica, seedComparativo, seedCadeia, baseState } from "./lib.js";
+import { VW, VH, SNAP_T, setDims, setSizeCtx, SUITE, useModalTrap, C, NODE_TYPES, TYPE_ORDER, MOMENTS, MOMENT_ORDER, NAT_LBL, ESTAB_LBL, KIND_LBL, brandes, parseCSVfull, csvNorm, colIdx, HELP, TOUR, Hint, Menu, MenuItem, REGION_COLORS, wrapText, sizeOf, degreeMap, clipToRect, distToSeg, qPoint, esc, edgeGeometry, arrowHead, barrierBar, estabBadge, scriptGlyph, calcGlyph, sourceLetter, sourceMark, nodeBody, buildInner, legendMetaFor, snapNode, alignNodes, distributeNodes, depths, forceLayout, arrange, declutter, fillLayout, foldBox, unfoldBox, parseCSV, toGraphML, toGEXF, seedVazio, seedRedeLivre, seedRedeUnica, seedComparativo, seedCadeia, baseState } from "./lib.js";
 
 // id único mesmo para cadastros no mesmo milissegundo (Date.now() sozinho colide)
 const uid = (prefix) => prefix + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 7);
@@ -483,7 +483,6 @@ table.cent{border-collapse:collapse;width:100%;font-size:12px} table.cent th{tex
   const desafogar = () => { setDims(state.W, state.H); mut((s) => ({ ...s, nodes: declutter(s.nodes) })); setGuides(null); };
   const preencher = () => { setDims(state.W, state.H); mut((s) => ({ ...s, nodes: fillLayout(s) })); setGuides(null); };
   const limparTudo = () => { let ok = true; try { ok = window.confirm("Apagar todos os actantes e associações? Dá para desfazer com Ctrl+Z."); } catch {} if (!ok) return; mut((s) => ({ ...s, nodes: [], edges: [], regions: [] })); setSelNodes([]); setSelEdge(null); setSelRegion(null); };
-  const carregarExemplo = () => { mut(() => seedDidatico()); setSelNodes([]); setSelEdge(null); setSelRegion(null); };
   const setCanvas = (w, h) => mut((s) => ({ ...s, W: Math.max(360, Math.min(3200, Math.round(w))), H: Math.max(280, Math.min(2400, Math.round(h))) }));
   const adjustFont = (key, delta) => mut((s) => { const cur = { titulo: 1, no: 1, aresta: 1, legenda: 1, sub: 1, entrelinha: 1.25, ...(s.fonts || {}) }; cur[key] = Math.max(0.6, Math.min(2.2, Math.round((cur[key] + delta) * 100) / 100)); return { ...s, fonts: cur }; });
   const fitCanvas = () => {
@@ -740,14 +739,13 @@ table.cent{border-collapse:collapse;width:100%;font-size:12px} table.cent th{tex
         )}
 
         <span id="tour-save" style={{ display: "inline-block" }}>
-          <Menu label="Projeto" title="salvar, abrir, exemplo e limpar" btnStyle={ui.mini}>
+          <Menu label="Projeto" title="salvar, abrir e limpar" btnStyle={ui.mini}>
             {(close) => (<>
               {hasSaved && <MenuItem onClick={() => { carregarSalvo(); close(); }}>Continuar de onde parei</MenuItem>}
               {hasSaved && <MenuItem onClick={() => { descartarSalvo(); close(); }}>Descartar salvo</MenuItem>}
               <MenuItem onClick={() => { exportJSON(); close(); }}>Salvar projeto (.json)</MenuItem>
               <MenuItem onClick={() => { fileRef.current?.click(); close(); }}>Abrir projeto (.json)</MenuItem>
               <MenuItem onClick={() => { csvRef.current?.click(); close(); }}>Importar CSV (associações)</MenuItem>
-              <MenuItem onClick={() => { carregarExemplo(); close(); }}>Carregar exemplo</MenuItem>
               <MenuItem danger onClick={() => { limparTudo(); close(); }}>Limpar tudo</MenuItem>
             </>)}
           </Menu>
@@ -1000,7 +998,6 @@ table.cent{border-collapse:collapse;width:100%;font-size:12px} table.cent th{tex
           {secHead("mod", "Modelos")}
           {openSec.mod && (<>
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-            <button style={ui.mini} onClick={() => { mut(() => seedDidatico()); setSelNodes([]); setSelEdge(null); }}>Exemplo didático</button>
             <button style={ui.mini} onClick={() => { mut(() => seedRedeLivre()); setSelNodes([]); setSelEdge(null); }}>Rede livre</button>
             <button style={ui.mini} onClick={() => { mut(() => seedRedeUnica()); setSelNodes([]); setSelEdge(null); }}>Rede única</button>
             <button style={ui.mini} onClick={() => { mut(() => seedComparativo()); setSelNodes([]); setSelEdge(null); }}>Comparativo</button>

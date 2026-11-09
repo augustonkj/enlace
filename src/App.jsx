@@ -8,7 +8,7 @@ import { RevisaoLiteratura } from "./RevisaoLiteratura.jsx";
 
 /* ===== Casca: seletor de ferramentas ===== */
 const TOURQ = [
-  { t: "Bem-vindo ao Enlace", b: "O Enlace reúne três janelas: Análise Qualitativa (que abriga a análise de texto, a revisão de literatura e a Teoria Ator-Rede), Mapa conceitual e Análise Quantitativa. Tudo começa em branco; cada ferramenta tem um botão Exemplo (no menu Projeto) se você quiser ver um modelo pronto." },
+  { t: "Bem-vindo ao Enlace", b: "O Enlace reúne três janelas: Análise Qualitativa (que abriga a análise de texto, a revisão de literatura e a Teoria Ator-Rede), Mapa conceitual e Análise Quantitativa. Tudo começa em branco. No Mapa conceitual e na Análise Quantitativa há um botão Exemplo, se você quiser ver um modelo pronto." },
   { t: "Texto", b: "A primeira sub-aba da Análise Qualitativa: cole ou abra um texto, selecione trechos e aplique códigos, agrupe em categorias e escreva o metatexto.", tool: "qual", sub: "texto" },
   { t: "Revisão de literatura", b: "A segunda sub-aba: monte a tabela de referências (à mão ou importando .csv, .bib ou .ris das bases), marque as duplicatas e defina a etapa de cada uma. O diagrama do fluxo — quantos foram identificados, quantos saíram e por quê, quantos entraram — é desenhado a partir dessa tabela, no formato PRISMA, e a aba Protocolo registra a pergunta, as bases e os critérios.", tool: "qual", sub: "revisao" },
   { t: "Ator-Rede", b: "A terceira sub-aba: cadastre os actantes e as associações da Teoria Ator-Rede em tabelas e alterne, ali mesmo, entre Tabela e Diagrama — são a mesma rede vista de dois jeitos.", tool: "qual", sub: "tar" },

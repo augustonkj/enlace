@@ -31,6 +31,14 @@ const vis = () => [...root.querySelectorAll("div")].find((d) => d.style.display 
 const pb = (re) => [...vis().querySelectorAll("button")].find((x) => re.test(x.textContent.trim()));
 const ptxt = () => vis().textContent.replace(/\s+/g, " ").trim();
 const ok = (c, m) => { console.log((c ? "  ok  " : "  FALHA ") + m); if (!c) process.exitCode = 1; };
+// os exemplos saíram do app: os dados de teste vêm de testes/fixtures, pelo botão Abrir
+const abrirFixture = async (nome, ms) => {
+  const inp = [...vis().querySelectorAll('input[type="file"]')].find((i) => (i.accept || "").includes("json"));
+  const f = new W.File([readFileSync(new URL("./fixtures/" + nome, import.meta.url), "utf8")], nome, { type: "application/json" });
+  Object.defineProperty(inp, "files", { value: [f], configurable: true });
+  inp.dispatchEvent(new W.Event("change", { bubbles: true }));
+  await wait(ms);
+};
 
 let cap = null;
 W.URL.createObjectURL = (b) => { cap = b; return "blob:t"; };
@@ -39,7 +47,7 @@ W.HTMLAnchorElement.prototype.click = function () {};
 
 await click(nav("Pular"));
 await click(nav("Texto"), 800);
-await click(pb(/^Exemplo$/), 1200);
+await abrirFixture("texto-entrevista.json", 1200);
 
 // --- exportar .qde
 await click(pb(/^\.qde$/), 900);

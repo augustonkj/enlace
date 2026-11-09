@@ -27,18 +27,26 @@ const vis = () => [...root.querySelectorAll("div")].find((d) => d.style.display 
 const pb = (re) => [...vis().querySelectorAll("button")].find((x) => re.test(x.textContent.trim()));
 const ptxt = () => vis().textContent.replace(/\s+/g, " ").trim();
 const ok = (c, msg) => { console.log((c ? "  ok  " : "  FALHA ") + msg); if (!c) process.exitCode = 1; };
+// os exemplos saíram do app: os dados de teste vêm de testes/fixtures, pelo botão Abrir
+const abrirFixture = async (nome, ms) => {
+  const inp = [...vis().querySelectorAll('input[type="file"]')].find((i) => (i.accept || "").includes("json"));
+  const f = new W.File([readFileSync(new URL("./fixtures/" + nome, import.meta.url), "utf8")], nome, { type: "application/json" });
+  Object.defineProperty(inp, "files", { value: [f], configurable: true });
+  inp.dispatchEvent(new W.Event("change", { bubbles: true }));
+  await wait(ms);
+};
 
 if (!nav("Pular")) { console.log("APP NAO SUBIU. erros:"); console.log(errors.slice(0,3).join(String.fromCharCode(10))); console.log("root:", root.textContent.slice(0,120)); process.exit(1); }
 await click(nav("Pular"), 400);
 await click(nav("Texto"), 900);
-await click(pb(/^Exemplo$/), 1500);
+await abrirFixture("texto-entrevista.json", 1500);
 ok(/✓ salvo/.test(ptxt()), "com memória disponível, mostra '✓ salvo'");
 
 // a partir daqui o navegador recusa toda gravação
 recusar = true;
-const nome = [...vis().querySelectorAll("input")].find((i) => i.value && /Exemplo/.test(i.value));
+const nome = [...vis().querySelectorAll("input")].find((i) => i.value && /Entrevista/.test(i.value));
 if (nome) {
-  Object.getOwnPropertyDescriptor(W.HTMLInputElement.prototype, "value").set.call(nome, "Exemplo editado");
+  Object.getOwnPropertyDescriptor(W.HTMLInputElement.prototype, "value").set.call(nome, "Entrevista editada");
   nome.dispatchEvent(new W.Event("input", { bubbles: true }));
 }
 await wait(2600);
@@ -62,7 +70,7 @@ ok(/"docs"/.test(conteudo) && /"excerpts"/.test(conteudo), "o arquivo salvo tem 
 // voltando a haver espaço, o app se recupera
 recusar = false;
 if (nome) {
-  Object.getOwnPropertyDescriptor(W.HTMLInputElement.prototype, "value").set.call(nome, "Exemplo recuperado");
+  Object.getOwnPropertyDescriptor(W.HTMLInputElement.prototype, "value").set.call(nome, "Entrevista recuperada");
   nome.dispatchEvent(new W.Event("input", { bubbles: true }));
 }
 await wait(2600);

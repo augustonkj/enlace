@@ -27,6 +27,14 @@ const vis = () => [...root.querySelectorAll("div")].find((d) => d.style.display 
 const pb = (re) => [...vis().querySelectorAll("button")].find((x) => re.test(x.textContent.trim()));
 const ptxt = () => vis().textContent.replace(/\s+/g, " ").trim();
 const ok = (c, m) => { console.log((c ? "  ok  " : "  FALHA ") + m); if (!c) process.exitCode = 1; };
+// os exemplos saíram do app: os dados de teste vêm de testes/fixtures, pelo botão Abrir
+const abrirFixture = async (nome, ms) => {
+  const inp = [...vis().querySelectorAll('input[type="file"]')].find((i) => (i.accept || "").includes("json"));
+  const f = new W.File([readFileSync(new URL("./fixtures/" + nome, import.meta.url), "utf8")], nome, { type: "application/json" });
+  Object.defineProperty(inp, "files", { value: [f], configurable: true });
+  inp.dispatchEvent(new W.Event("change", { bubbles: true }));
+  await wait(ms);
+};
 const setSel = (el, v) => { Object.getOwnPropertyDescriptor(W.HTMLSelectElement.prototype, "value").set.call(el, v); el.dispatchEvent(new W.Event("change", { bubbles: true })); };
 const setInp = (el, v) => { Object.getOwnPropertyDescriptor(W.HTMLInputElement.prototype, "value").set.call(el, v); el.dispatchEvent(new W.Event("input", { bubbles: true })); };
 const setTxt = (el, v) => { Object.getOwnPropertyDescriptor(W.HTMLTextAreaElement.prototype, "value").set.call(el, v); el.dispatchEvent(new W.Event("input", { bubbles: true })); };
@@ -37,8 +45,7 @@ await click(nav("Revisão"), 700);
 console.log("REVISÃO ->", ptxt().slice(0, 110));
 
 // exemplo
-await click(pb(/^Projeto/), 300);
-await click(pb(/Carregar exemplo/), 900);
+await abrirFixture("revisao-modelagem.json", 900);
 const linhas = vis().querySelectorAll("tbody tr").length;
 const t = ptxt();
 const cont = {};

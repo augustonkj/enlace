@@ -344,52 +344,6 @@ function importarREFI(xml, nomeArquivo) {
   return p;
 }
 
-function exampleProject() {
-  const text = `ENTREVISTA — Experiência de trabalho remoto
-(participante: profissional, 34 anos; entrevista semiestruturada)
-
-Entrevistador: Como foi para você começar a trabalhar de casa?
-Participante: No começo foi confuso. Eu não tinha um espaço só para o trabalho, então usava a mesa da cozinha. A internet caía toda hora e eu perdia parte das reuniões, o que me deixava ansioso. Levei umas três semanas para criar uma rotina que funcionasse.
-
-Entrevistador: E o contato com os colegas, como ficou?
-Participante: Senti muita falta da convivência. Antes a gente resolvia as coisas no corredor, rápido. De casa, tudo virava mensagem ou reunião marcada, e eu me senti bastante isolado, principalmente nas primeiras semanas.
-
-Entrevistador: Teve algum ponto positivo?
-Participante: Sim, vários. Economizei o tempo do deslocamento, que antes eram duas horas por dia, e consegui organizar meu trabalho no meu próprio ritmo. Passei a almoçar com a minha família, coisa que não acontecia havia anos. Essa flexibilidade foi o que mais valorizei.
-
-Entrevistador: E as dificuldades continuaram?
-Participante: Algumas sim. Como o computador estava sempre ali, eu acabava trabalhando além da hora, respondendo mensagem à noite. Eram tarefas demais e eu passava o dia inteiro na tela. No fim de alguns meses eu estava exausto, mesmo gostando da liberdade que o modelo trouxe.
-
-Entrevistador: Olhando para trás, o que você mudaria?
-Participante: Eu definiria horários mais claros desde o início e combinaria com a equipe momentos fixos para conversar. O problema não foi o trabalho remoto em si, mas a falta de combinados.`;
-  const codes = [
-    { id: "c1", name: "Dificuldade técnica", color: PALETTE[0], desc: "internet, equipamento, espaço de trabalho" },
-    { id: "c2", name: "Adaptação", color: PALETTE[2], desc: "criar rotina, ajustar-se ao novo modelo" },
-    { id: "c3", name: "Isolamento", color: PALETTE[1], desc: "falta de convívio e troca informal" },
-    { id: "c4", name: "Flexibilidade", color: PALETTE[3], desc: "tempo, deslocamento, família" },
-    { id: "c5", name: "Autonomia", color: PALETTE[5], desc: "organizar o próprio trabalho" },
-    { id: "c6", name: "Sobrecarga", color: PALETTE[6], desc: "excesso de jornada e de tela" },
-  ];
-  const mk = (id, sub, codeIds, memo = "") => { const start = text.indexOf(sub); return { id, start, end: start + sub.length, text: sub, codeIds, memo }; };
-  const excerpts = [
-    mk("e1", "A internet caía toda hora e eu perdia parte das reuniões", ["c1"], "problema de acesso"),
-    mk("e2", "Levei umas três semanas para criar uma rotina", ["c2"]),
-    mk("e3", "me senti bastante isolado, principalmente nas primeiras semanas", ["c3"]),
-    mk("e4", "Economizei o tempo do deslocamento, que antes eram duas horas por dia", ["c4"]),
-    mk("e5", "consegui organizar meu trabalho no meu próprio ritmo", ["c5"]),
-    mk("e6", "Essa flexibilidade foi o que mais valorizei", ["c4"], "valor central para o participante"),
-    mk("e7", "eu acabava trabalhando além da hora, respondendo mensagem à noite", ["c6"]),
-    mk("e8", "Eram tarefas demais e eu passava o dia inteiro na tela", ["c6", "c1"], "sobrecarga ligada à tela"),
-  ];
-  const categories = [
-    { id: "k1", name: "Desafios da transição", tipo: "emergente", desc: "o que dificultou a mudança para o remoto", codeIds: ["c1", "c2", "c3", "c6"] },
-    { id: "k2", name: "Ganhos percebidos", tipo: "emergente", desc: "o que o participante passou a valorizar", codeIds: ["c4", "c5"] },
-  ];
-  const metatexts = [
-    { id: "m1", title: "Desafios da transição", categoryId: "k1", body: "Os relatos descrevem uma transição inicialmente custosa para o trabalho remoto: problemas técnicos de acesso, a necessidade de construir uma rotina nova, a perda do convívio informal e, mais adiante, a sobrecarga ligada ao tempo de tela. Este é um rascunho de exemplo: substitua por sua própria interpretação, apoiada nos recortes." },
-  ];
-  return { id: uid(), name: "Exemplo: entrevista (trabalho remoto)", text, codes, excerpts, categories, metatexts, updated: Date.now() };
-}
 const QHELP = [
   { h: "O que é", items: ["Módulo de análise qualitativa de texto. Apoia o ciclo geral da análise: codificação > categorização > interpretação."] },
   { h: "Fluxo geral", items: ["1) Na aba Documentos, importe os textos do corpus (.txt, .docx, .pdf) — vários de uma vez, se quiser. 2) Selecione um trecho e aplique um ou mais códigos; o livro de códigos vale para todos os documentos. 3) Agrupe os códigos em categorias. 4) Na aba Consultas, recupere os recortes de todo o corpus e compare grupos de documentos. 5) Veja o quantitativo (frequências, nuvem de palavras). 6) Escreva o metatexto."] },
@@ -420,7 +374,6 @@ const QHELP = [
     ["Salvar Enlace", "no topo do programa, salva e restaura num único arquivo o trabalho das duas ferramentas (diagrama + análise textual)."],
     ["Compartilhar", "gera um HTML do projeto para leitura."],
     ["Relatório", "documento com o texto codificado, os códigos, as categorias e os metatextos."],
-    ["Exemplo", "carrega um projeto pronto (trabalho remoto) já codificado, para ver como tudo funciona."],
   ] },
   { h: "Salvamento", items: ["O trabalho é salvo automaticamente no navegador. Para levar a outro computador, use Salvar (.json) ou Salvar Enlace (backup completo)."] },
 ];
@@ -625,14 +578,6 @@ function App() {
     const ni = [...index, { id: p.id, name: p.name }];
     setIndex(ni); await saveKey(STORE.index, ni); await saveKey(STORE.active, p.id);
     setProject(p); setPending(null); setSelExcerpt(null);
-  }
-  async function loadExample() {
-    await flushSave();
-    const p = migrarProjeto(exampleProject());
-    await saveKey(STORE.proj(p.id), p);
-    const ni = [...index, { id: p.id, name: p.name }];
-    setIndex(ni); await saveKey(STORE.index, ni); await saveKey(STORE.active, p.id);
-    setProject(p); setPending(null); setSelExcerpt(null); setTab("codificacao");
   }
   function excludeWord(word) {
     const w = (word || "").toLowerCase();
@@ -898,7 +843,10 @@ function App() {
           alert("Arquivo inválido. Use um .codifica.json desta ferramenta ou um .qde/.qdc (REFI-QDA).");
           return;
         }
-        p = migrarProjeto({ ...emptyProject(), ...obj, id: uid() });
+        // arquivo do formato antigo (um "text", sem "docs"): o docs vazio do projeto-base
+        // não pode entrar, senão a migração o vê e descarta o texto do arquivo
+        const { docs, docAtual, ...base } = emptyProject();
+        p = migrarProjeto({ ...(Array.isArray(obj.docs) ? emptyProject() : base), ...obj, id: uid() });
       }
       await saveKey(STORE.proj(p.id), p);
       const ni = [...index, { id: p.id, name: p.name }];
@@ -957,7 +905,6 @@ function App() {
       <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", rowGap: 8, gap: 12, padding: "10px 16px", borderBottom: `1px solid ${C.line}`, background: C.panel }}>
         <div style={{ fontWeight: 700, letterSpacing: 0.5, fontSize: 16, color: C.accent }}>Análise textual</div>
         <span style={{ fontSize: 11, color: C.sub, fontFamily: "system-ui" }}>análise qualitativa</span>
-        <Btn onClick={loadExample}>Exemplo</Btn>
         <Btn onClick={() => setShowHelp(true)}>? Ajuda</Btn>
         <div style={{ flex: 1 }} />
         <span style={{ fontSize: 11, color: erroLocal ? "#b3402f" : saving ? C.sub : "#2e7d4f", fontFamily: "system-ui", minWidth: 78, textAlign: "right", fontWeight: erroLocal ? 700 : 400 }}
@@ -1048,6 +995,70 @@ function Btn({ children, onClick, danger }) {
 }
 
 // ============ CODIFICAÇÃO ============
+/* Documento aberto na Codificação: uma linha só, que abre uma coluna com a
+   lista. Com dezenas de documentos, um botão por documento tomava a tela. */
+function SeletorDocumentos({ project, C, abrirDoc, setTab }) {
+  const [aberto, setAberto] = useState(false);
+  const [filtro, setFiltro] = useState("");
+  const docs = docsDe(project);
+  const i = Math.max(0, docs.findIndex((d) => d.id === project.docAtual));
+  const atual = docs[i];
+  const nAtual = atual ? exDoDoc(project, atual.id).length : 0;
+  const f = dobrarTexto(filtro.trim().toLowerCase());
+  const lista = f ? docs.filter((d) => dobrarTexto((d.name || "").toLowerCase()).includes(f)) : docs;
+  useEffect(() => {
+    if (!aberto) return;
+    const esc = (e) => { if (e.key === "Escape") setAberto(false); };
+    window.addEventListener("keydown", esc);
+    return () => window.removeEventListener("keydown", esc);
+  }, [aberto]);
+  const escolher = (id) => { abrirDoc(id); setAberto(false); setFiltro(""); };
+  return (
+    <>
+      <div style={{ padding: "5px 12px", borderBottom: `1px solid ${C.line}`, background: C.panel, display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+        <button onClick={() => setAberto(!aberto)} aria-expanded={aberto} title="escolher o documento"
+          style={{ ...btnStyle(C), fontSize: 11.5, padding: "3px 10px", display: "flex", alignItems: "center", gap: 6, minWidth: 0, maxWidth: "70%", background: aberto ? C.accent : "#fff", color: aberto ? "#fff" : C.ink }}>
+          <span aria-hidden="true">☰</span>
+          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 700 }}>{atual ? atual.name : "—"}</span>
+          {nAtual > 0 && <span style={{ opacity: 0.75 }}>({nAtual})</span>}
+        </button>
+        <span style={{ fontSize: 11, color: C.sub, whiteSpace: "nowrap" }}>{i + 1} de {docs.length}</span>
+        <button onClick={() => abrirDoc(docs[i - 1].id)} disabled={i === 0} aria-label="documento anterior" title="documento anterior" style={{ ...btnStyle(C), padding: "2px 8px", fontSize: 12 }}>‹</button>
+        <button onClick={() => abrirDoc(docs[i + 1].id)} disabled={i === docs.length - 1} aria-label="próximo documento" title="próximo documento" style={{ ...btnStyle(C), padding: "2px 8px", fontSize: 12 }}>›</button>
+        <button onClick={() => setTab("corpus")} style={{ ...btnStyle(C), fontSize: 11, padding: "3px 9px", marginLeft: "auto" }}>gerenciar…</button>
+      </div>
+      {aberto && (
+        <div role="dialog" aria-label="Documentos do projeto"
+          style={{ position: "absolute", top: 0, left: 0, bottom: 0, width: 270, maxWidth: "85%", zIndex: 5, background: "#fff", borderRight: `1px solid ${C.line}`, boxShadow: "4px 0 14px rgba(0,0,0,.08)", display: "flex", flexDirection: "column", fontFamily: "system-ui" }}>
+          <div style={{ padding: "8px 10px", borderBottom: `1px solid ${C.line}`, display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ fontSize: 10.5, color: C.sub, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.4 }}>Documentos ({docs.length})</span>
+            <button onClick={() => setAberto(false)} aria-label="fechar" title="fechar (Esc)" style={{ ...btnStyle(C), padding: "1px 7px", fontSize: 12, marginLeft: "auto" }}>✕</button>
+          </div>
+          <div style={{ padding: "6px 10px" }}>
+            <input autoFocus value={filtro} onChange={(e) => setFiltro(e.target.value)} placeholder="filtrar por nome…"
+              onKeyDown={(e) => { if (e.key === "Enter" && lista.length) escolher(lista[0].id); }}
+              style={{ width: "100%", boxSizing: "border-box", fontSize: 12, padding: "4px 8px", border: `1px solid ${C.line}`, borderRadius: 4 }} />
+          </div>
+          <div style={{ flex: 1, overflow: "auto", padding: "0 6px 8px" }}>
+            {lista.map((d) => {
+              const on = d.id === project.docAtual;
+              const n = exDoDoc(project, d.id).length;
+              return (
+                <button key={d.id} onClick={() => escolher(d.id)} title={d.name}
+                  style={{ display: "flex", alignItems: "center", gap: 6, width: "100%", textAlign: "left", border: "none", borderRadius: 4, padding: "6px 8px", marginBottom: 1, cursor: "pointer", fontSize: 12.5, background: on ? C.accent : "transparent", color: on ? "#fff" : C.ink, fontWeight: on ? 700 : 400 }}>
+                  <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.name}</span>
+                  {n > 0 && <span style={{ fontSize: 11, opacity: 0.75 }}>{n}</span>}
+                </button>
+              );
+            })}
+            {!lista.length && <div style={{ fontSize: 12, color: C.sub, padding: 8 }}>nenhum documento com esse nome</div>}
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 function CodificacaoView(props) {
   const { project, segments, codeMap, C, pending, setPending, selExcerpt, setSelExcerpt,
     addCode, assignCode, removeCode, renameCode, setCodeColor, mergeCode, removeExcerpt, setExcerptMemo, toggleCodeOnExcerpt,
@@ -1089,7 +1100,7 @@ function CodificacaoView(props) {
   return (
     <>
       {/* texto */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", borderRight: `1px solid ${C.line}` }}>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", borderRight: `1px solid ${C.line}`, position: "relative", minWidth: 0 }}>
         {!textoDe(project) && !pasteMode && (
           <div style={{ margin: "auto", textAlign: "center", fontFamily: "system-ui", color: C.sub }}>
             <p style={{ marginBottom: 16, fontSize: 14 }}>Comece pelo material a analisar.</p>
@@ -1112,20 +1123,7 @@ function CodificacaoView(props) {
         {textoDe(project) && !pasteMode && (
           <>
             {docsDe(project).length > 1 && (
-              <div style={{ padding: "5px 12px", borderBottom: `1px solid ${C.line}`, background: C.panel, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                <span style={{ fontSize: 10.5, color: C.sub, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.4 }}>Documento</span>
-                {docsDe(project).map((d) => {
-                  const on = d.id === project.docAtual;
-                  const n = exDoDoc(project, d.id).length;
-                  return (
-                    <button key={d.id} onClick={() => abrirDoc(d.id)} title={`${n} recorte(s)`}
-                      style={{ ...btnStyle(C), fontSize: 11, padding: "3px 9px", background: on ? C.accent : "#fff", color: on ? "#fff" : C.ink, fontWeight: on ? 700 : 400 }}>
-                      {d.name}{n ? ` (${n})` : ""}
-                    </button>
-                  );
-                })}
-                <button onClick={() => setTab("corpus")} style={{ ...btnStyle(C), fontSize: 11, padding: "3px 9px" }}>gerenciar…</button>
-              </div>
+              <SeletorDocumentos {...{ project, C, abrirDoc, setTab }} />
             )}
             <div style={{ padding: "6px 12px", fontFamily: "system-ui", fontSize: 11, color: C.sub, borderBottom: `1px solid ${C.line}`, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
               <span>{textoDe(project).length} caracteres</span>
