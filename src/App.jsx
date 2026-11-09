@@ -141,7 +141,7 @@ export default function App() {
       <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
         <div style={{ display: showTar ? "block" : "none", height: "100%" }}><EditorTAR active={showTar} viewMode={tarView} setViewMode={(v) => { setTool("qual"); setQualSub("tar"); setTarView(v === "diagrama" ? "diagrama" : "analise"); }} /></div>
         <div style={{ display: tool === "diag" ? "block" : "none", height: "100%" }}><DiagramaGeral active={tool === "diag"} /></div>
-        <div style={{ display: tool === "qual" && qualSub === "texto" ? "block" : "none", height: "100%" }}><AnaliseQualitativa /></div>
+        <div style={{ display: tool === "qual" && qualSub === "texto" ? "block" : "none", height: "100%" }}><AnaliseQualitativa active={tool === "qual" && qualSub === "texto"} /></div>
         <div style={{ display: tool === "qual" && qualSub === "revisao" ? "block" : "none", height: "100%" }}><RevisaoLiteratura active={tool === "qual" && qualSub === "revisao"} /></div>
         <div style={{ display: tool === "quant" ? "block" : "none", height: "100%" }}><AnaliseQuantitativa active={tool === "quant"} /></div>
       </div>

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useMemo, useEffect, useCallback } from "react";
-import { SUITE, useModalTrap, BarrasH, marcarAlterado } from "./lib.js";
+import { SUITE, useModalTrap, BarrasH, marcarAlterado, useHistorico, useAtalhosDesfazer } from "./lib.js";
 
 /* ===== Módulo: Análise textual qualitativa (Codifica - Bardin / ATD) ===== */
 const AnaliseQualitativa = (() => {
@@ -529,9 +529,11 @@ ${h2("Corpus analisado")}${tabDocs}
 const ABAS = { corpus: "Documentos", codificacao: "Codificação", categorias: "Categorias", recuperacao: "Consultas", quantitativo: "Quantitativo", metatexto: "Metatexto" };
 
 
-function App() {
+function App({ active = true }) {
   const [project, setProject] = useState(null);
   const [index, setIndex] = useState([]); // [{id,name}]
+  const hist = useHistorico(project, setProject, { chave: project && project.id });
+  useAtalhosDesfazer(active, hist.desfazer, hist.refazer);
   const [tab, setTab] = useState("codificacao");
   const [pending, setPending] = useState(null); // {start,end,text}
   const [selExcerpt, setSelExcerpt] = useState(null);
@@ -950,6 +952,8 @@ function App() {
         <div style={{ fontWeight: 700, letterSpacing: 0.5, fontSize: 16, color: C.accent }}>Análise textual</div>
         <span style={{ fontSize: 11, color: C.sub, fontFamily: "system-ui" }}>análise qualitativa</span>
         <Btn onClick={() => setShowHelp(true)}>? Ajuda</Btn>
+        <Btn onClick={hist.desfazer} disabled={!hist.podeDesfazer} title="desfazer (Ctrl+Z)">↶</Btn>
+        <Btn onClick={hist.refazer} disabled={!hist.podeRefazer} title="refazer (Ctrl+Shift+Z)">↷</Btn>
         <div style={{ flex: 1 }} />
         <select value={project.id} onChange={(e) => switchProject(e.target.value)}
           style={{ fontFamily: "system-ui", fontSize: 12, padding: "4px 8px", border: `1px solid ${C.line}`, borderRadius: 4, background: "#fff" }}>
@@ -1028,9 +1032,9 @@ function App() {
 function btnStyle(C) {
   return { fontFamily: "system-ui", fontSize: 12, padding: "5px 10px", border: `1px solid ${C.line}`, borderRadius: 4, background: "#fff", color: C.ink, cursor: "pointer", whiteSpace: "nowrap" };
 }
-function Btn({ children, onClick, danger }) {
+function Btn({ children, onClick, danger, disabled, title }) {
   const C = { line: "#e3e9ee", ink: "#2b3a48" };
-  return <button onClick={onClick} style={{ ...btnStyle(C), color: danger ? "#b03a2e" : C.ink }}>{children}</button>;
+  return <button onClick={onClick} disabled={disabled} title={title} style={{ ...btnStyle(C), color: danger ? "#b03a2e" : C.ink, opacity: disabled ? 0.45 : 1, cursor: disabled ? "default" : "pointer" }}>{children}</button>;
 }
 
 // ============ CODIFICAÇÃO ============

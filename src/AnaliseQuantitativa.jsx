@@ -10,7 +10,7 @@ function boxStats(a) {
   return { q1, med, q3, lo, hi, min: v[0], max: v[n - 1] };
 }
 import * as ST from "./stats.js";
-import { useMarcarAlterado, SUITE } from "./lib.js";
+import { useMarcarAlterado, useHistorico, useAtalhosDesfazer, SUITE } from "./lib.js";
 
 const PALETTES = {
   "Padrão": ["#1f7a8c", "#7a5ea8", "#2e7d4f", "#b06a1f", "#c0392b", "#16a085"],
@@ -530,6 +530,9 @@ function AnaliseQuantitativa({ active = true }) {
 
   // nada vai para o navegador; só avisa que há o que salvar
   useMarcarAlterado(grid);
+  // desfazer/refazer valem para a grade de dados
+  const hist = useHistorico(grid, setGrid);
+  useAtalhosDesfazer(active, hist.desfazer, hist.refazer);
   // expõe a Análise Quantitativa ao Salvar/Abrir do Enlace (App.jsx)
   const quantRef = useRef({});
   quantRef.current = { grid, testKey, vars, mu0, conf, hMoses };
@@ -916,6 +919,8 @@ function AnaliseQuantitativa({ active = true }) {
       <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
         <h2 style={T.h2}>Análise Quantitativa</h2>
         <div style={{ flex: 1 }} />
+        <button style={{ ...T.btn, opacity: hist.podeDesfazer ? 1 : 0.45 }} onClick={hist.desfazer} disabled={!hist.podeDesfazer} title="desfazer na grade (Ctrl+Z)">↶</button>
+        <button style={{ ...T.btn, opacity: hist.podeRefazer ? 1 : 0.45 }} onClick={hist.refazer} disabled={!hist.podeRefazer} title="refazer na grade (Ctrl+Shift+Z)">↷</button>
         {result && <button style={T.btn} onClick={copyResult} title="copiar os números do resultado para colar em outro lugar">{copied ? "Copiado!" : "Copiar resultado"}</button>}
         <button style={T.btn} onClick={exportCSV} title="baixar os dados da grade em CSV (separador ;)">Exportar CSV</button>
         <button style={T.btn} onClick={exportPDF} title="gerar relatório com os dados e o resultado">Relatório PDF</button>

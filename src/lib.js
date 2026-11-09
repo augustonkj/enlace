@@ -1082,6 +1082,78 @@ function useMarcarAlterado(valor) {
   useEffect(() => { if (primeiro.current) { primeiro.current = false; return; } marcarAlterado(); }, [valor]);
 }
 
+/* ============================================================
+   Desfazer / refazer.
+
+   useHistorico observa um estado imutável e guarda as versões anteriores,
+   sem que cada edição precise "empurrar" o histórico. Mudanças seguidas em
+   menos de `agruparMs` (digitar uma palavra, arrastar) viram um passo só.
+   Quando `chave` muda (trocou de projeto), o histórico recomeça.
+
+   useAtalhosDesfazer liga Ctrl/⌘+Z, Ctrl/⌘+Shift+Z e Ctrl+Y à janela visível.
+   Dentro de um campo de texto o atalho fica com o navegador, que desfaz a
+   digitação letra a letra; fora dele, desfaz a última ação da janela.
+   ============================================================ */
+function useHistorico(valor, definir, { chave, limite = 80, agruparMs = 600 } = {}) {
+  const passado = useRef([]), futuro = useRef([]);
+  const anterior = useRef(valor), chaveAnterior = useRef(chave);
+  const ultimaMudanca = useRef(0), vindoDoHistorico = useRef(false);
+  const [, renderizar] = useState(0);
+  useEffect(() => {
+    if (valor === anterior.current && chave === chaveAnterior.current) return;
+    if (vindoDoHistorico.current) vindoDoHistorico.current = false;
+    else if (chave !== chaveAnterior.current || anterior.current == null) { passado.current = []; futuro.current = []; }
+    else {
+      const agora = Date.now();
+      if (!passado.current.length || agora - ultimaMudanca.current > agruparMs) passado.current = [...passado.current.slice(-(limite - 1)), anterior.current];
+      ultimaMudanca.current = agora;
+      futuro.current = [];
+    }
+    anterior.current = valor; chaveAnterior.current = chave;
+    renderizar((n) => n + 1);
+  }, [valor, chave]);
+  const desfazer = useCallback(() => {
+    if (!passado.current.length) return;
+    const v = passado.current[passado.current.length - 1];
+    passado.current = passado.current.slice(0, -1);
+    futuro.current = [anterior.current, ...futuro.current].slice(0, limite);
+    vindoDoHistorico.current = true; ultimaMudanca.current = 0;
+    definir(v);
+  }, [definir, limite]);
+  const refazer = useCallback(() => {
+    if (!futuro.current.length) return;
+    const v = futuro.current[0];
+    futuro.current = futuro.current.slice(1);
+    passado.current = [...passado.current, anterior.current].slice(-limite);
+    vindoDoHistorico.current = true; ultimaMudanca.current = 0;
+    definir(v);
+  }, [definir, limite]);
+  return { desfazer, refazer, podeDesfazer: passado.current.length > 0, podeRefazer: futuro.current.length > 0 };
+}
+
+// o foco está num lugar onde se digita texto?
+function emCampoDeTexto(el) {
+  if (!el) return false;
+  if (el.isContentEditable || el.tagName === "TEXTAREA") return true;
+  if (el.tagName !== "INPUT") return false;
+  return !/^(button|checkbox|radio|range|color|file|submit|reset|image)$/i.test(el.type || "text");
+}
+function useAtalhosDesfazer(ativo, desfazer, refazer) {
+  useEffect(() => {
+    if (!ativo) return;
+    const h = (e) => {
+      if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+      const k = (e.key || "").toLowerCase();
+      if (k !== "z" && k !== "y") return;
+      if (emCampoDeTexto(document.activeElement)) return;
+      e.preventDefault();
+      if (k === "y" || e.shiftKey) refazer(); else desfazer();
+    };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, [ativo, desfazer, refazer]);
+}
+
 
 /* ============================================================
    Gráficos em SVG, feitos à mão.
@@ -1149,4 +1221,4 @@ function BarrasH({ dados, largRotulo = 150, corPadrao = "#1f7a8c", alturaBarra =
 
 function setSizeCtx(v) { SIZE_CTX = v; }
 
-export { marcarAlterado, marcarSalvo, haAlteracoes, useMarcarAlterado, BarrasH, escalaBonita, numBR, VW, VH, SNAP_T, setDims, setSizeCtx, SUITE, useModalTrap, C, NODE_TYPES, TYPE_ORDER, MOMENTS, MOMENT_ORDER, NAT_LBL, ESTAB_LBL, KIND_LBL, brandes, parseCSVfull, csvNorm, colIdx, HELP, TOUR, Hint, Menu, MenuItem, REGION_COLORS, wrapText, sizeOf, degreeMap, clipToRect, distToSeg, qPoint, esc, edgeGeometry, arrowHead, barrierBar, estabBadge, scriptGlyph, calcGlyph, sourceLetter, sourceMark, nodeBody, buildInner, legendMetaFor, snapNode, alignNodes, distributeNodes, depths, forceLayout, arrange, declutter, fillLayout, foldBox, unfoldBox, parseCSV, toGraphML, toGEXF, seedVazio, seedRedeLivre, seedRedeUnica, seedComparativo, seedCadeia, baseState };
+export { marcarAlterado, marcarSalvo, haAlteracoes, useMarcarAlterado, useHistorico, useAtalhosDesfazer, emCampoDeTexto, BarrasH, escalaBonita, numBR, VW, VH, SNAP_T, setDims, setSizeCtx, SUITE, useModalTrap, C, NODE_TYPES, TYPE_ORDER, MOMENTS, MOMENT_ORDER, NAT_LBL, ESTAB_LBL, KIND_LBL, brandes, parseCSVfull, csvNorm, colIdx, HELP, TOUR, Hint, Menu, MenuItem, REGION_COLORS, wrapText, sizeOf, degreeMap, clipToRect, distToSeg, qPoint, esc, edgeGeometry, arrowHead, barrierBar, estabBadge, scriptGlyph, calcGlyph, sourceLetter, sourceMark, nodeBody, buildInner, legendMetaFor, snapNode, alignNodes, distributeNodes, depths, forceLayout, arrange, declutter, fillLayout, foldBox, unfoldBox, parseCSV, toGraphML, toGEXF, seedVazio, seedRedeLivre, seedRedeUnica, seedComparativo, seedCadeia, baseState };

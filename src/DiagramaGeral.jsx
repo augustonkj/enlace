@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
-import { wrapText, esc, SUITE, Menu, MenuItem, useMarcarAlterado } from "./lib.js";
+import { wrapText, esc, SUITE, Menu, MenuItem, useMarcarAlterado, emCampoDeTexto } from "./lib.js";
 
 /*
   Mapa conceitual — nós e ligações rotuladas, sem as regras da Teoria Ator-Rede.
@@ -262,7 +262,8 @@ function DiagramaGeral({ active = true }) {
       if (e.key === "Escape") { setMode("select"); setConnectFrom(null); }
       else if ((e.key === "Delete" || e.key === "Backspace") && (sels.length || selEdge)) { if (emCampo) return; e.preventDefault(); removeSel(); }
       else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "a") { if (emCampo) return; e.preventDefault(); setSels(stateRef.current.nodes.map((n) => n.id)); setSelEdge(null); }
-      else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") { e.preventDefault(); e.shiftKey ? redo() : undo(); }
+      else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") { if (emCampoDeTexto(document.activeElement)) return; e.preventDefault(); e.shiftKey ? redo() : undo(); }
+      else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "y") { if (emCampoDeTexto(document.activeElement)) return; e.preventDefault(); redo(); }
     };
     window.addEventListener("keydown", h); return () => window.removeEventListener("keydown", h);
   }, [active, sels, selEdge, undo, redo, removeSel]);

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
-import { esc, SUITE, Menu, MenuItem, Hint, parseCSVfull, csvNorm, wrapText, useMarcarAlterado } from "./lib.js";
+import { esc, SUITE, Menu, MenuItem, Hint, parseCSVfull, csvNorm, wrapText, useMarcarAlterado, useHistorico, useAtalhosDesfazer } from "./lib.js";
 
 /*
   Revisão de literatura — tabela de referências + diagrama de fluxo da seleção.
@@ -283,13 +283,14 @@ function RevisaoLiteratura({ active = true }) {
   const [filtro, setFiltro] = useState("");
   const [fEtapa, setFEtapa] = useState("");
   const [msg, setMsg] = useState("");
-  const [past, setPast] = useState([]);
   const stateRef = useRef(state); useEffect(() => { stateRef.current = state; });
   const fileRef = useRef(null); const jsonRef = useRef(null); const svgRef = useRef(null);
 
   const aviso = (t) => { setMsg(t); setTimeout(() => setMsg(""), 4000); };
-  const mut = useCallback((u) => { setPast((p) => [...p.slice(-40), JSON.stringify(stateRef.current)]); setStateRaw(u); }, []);
-  const undo = useCallback(() => setPast((p) => { if (!p.length) return p; setStateRaw(JSON.parse(p[p.length - 1])); return p.slice(0, -1); }), []);
+  // o histórico acompanha toda mudança do estado (useHistorico), então mut é só um set
+  const mut = setStateRaw;
+  const hist = useHistorico(state, setStateRaw);
+  useAtalhosDesfazer(active, hist.desfazer, hist.refazer);
 
   useEffect(() => {
     SUITE.getRevisao = () => stateRef.current;
@@ -405,7 +406,8 @@ function RevisaoLiteratura({ active = true }) {
         <span style={divi} />
         <button style={mini} onClick={addRef}>+ Referência</button>
         <button style={mini} onClick={marcarDuplicados} title="compara DOI e, na falta dele, título + ano">Marcar duplicatas</button>
-        <button style={mini} onClick={undo} disabled={!past.length} title="desfazer">↶</button>
+        <button style={mini} onClick={hist.desfazer} disabled={!hist.podeDesfazer} title="desfazer (Ctrl+Z)">↶</button>
+        <button style={mini} onClick={hist.refazer} disabled={!hist.podeRefazer} title="refazer (Ctrl+Shift+Z)">↷</button>
         <Menu label="Importar" btnStyle={mini} title="importar referências das bases">
           {(close) => (<>
             <MenuItem onClick={() => { fileRef.current?.click(); close(); }}>Arquivo (.csv, .bib, .ris)…</MenuItem>
