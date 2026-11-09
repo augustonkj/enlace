@@ -46,12 +46,14 @@ Saída: `Enlace.html` (~1,6 MB). É só abrir no navegador.
   todo ponto de carga — o texto vira um documento e os recortes apontam para ele.
   Helpers: `docsDe`, `docAtualDe`, `textoDe`, `exDoDoc`, `textoTodo`.
 
-  **PDF**: fora, de propósito. O pdf.js embutido chegou a funcionar (inclusive
-  sem Worker, pelo gancho `globalThis.pdfjsWorker`, para o arquivo continuar
-  abrindo por duplo clique), mas sozinho levava o bundle de ~1,6 MB para ~3,3 MB
-  — caro demais para um app cujo ponto é ser um arquivo único leve. O mapa de
-  páginas (`doc.paginas`, `paginaDoOffset()`) segue no modelo, então um leitor
-  leve pode entrar depois sem outra mudança.
+  **PDF**: o pdf.js **não** é embutido (sozinho levaria o bundle de ~1,6 MB
+  para ~3,3 MB). `carregarPdfjs()` o importa sob demanda da jsDelivr
+  (`pdfjs-dist@6.2.108`, versão fixa) só quando um `.pdf` é escolhido, e roda
+  sem Worker pelo gancho `globalThis.pdfjsWorker`, para funcionar em `file://`.
+  Ler PDF, portanto, pede internet no momento da importação; o resto do app
+  segue offline. `textoDePDF()` devolve o texto e o mapa de páginas
+  (`doc.paginas`), que `paginaDoOffset()` usa para mostrar a página de cada
+  recorte nas Consultas.
 
   **REFI-QDA**: `exportarREFI()`/`importarREFI()` leem e escrevem o QDA-XML 1.0
   (`.qde`/`.qdc`) — o formato que NVivo, MAXQDA e ATLAS.ti abrem.

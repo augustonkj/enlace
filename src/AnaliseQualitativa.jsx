@@ -145,16 +145,60 @@ function migrarProjeto(p) {
   const { text, ...resto } = p;
   return { ...base, ...resto, docs: [doc], docAtual: "d1", excerpts: (p.excerpts || []).map((e) => ({ ...e, docId: "d1" })) };
 }
-/* ---- PDF ----
-   O pdf.js foi retirado de propósito: sozinho ele dobrava o tamanho do arquivo
-   (de ~1,6 MB para ~3,3 MB), e este app existe para ser um arquivo único leve.
-   O mapa de páginas (doc.paginas) continua no modelo: se um leitor de PDF leve
-   entrar depois, a página de cada recorte volta a funcionar sem outra mudança. */
+/* ---- PDF: texto com as páginas mapeadas ----
+   Embutir o pdf.js dobraria o arquivo (~1,6 MB → ~3,3 MB). Por isso ele é
+   carregado sob demanda, da CDN, só quando um .pdf é escolhido: o app segue
+   leve e offline para .txt/.docx, e ler PDF pede internet naquele momento.
+   Roda SEM Worker: o módulo do worker é pendurado em globalThis.pdfjsWorker,
+   o gancho de "fake worker" da própria biblioteca (funciona em file://). */
+const PDFJS_CDN = "https://cdn.jsdelivr.net/npm/pdfjs-dist@6.2.108/build/";
+let _pdfjs = null;
+function carregarPdfjs() {
+  if (!_pdfjs) {
+    const importar = (u) => import(/* webpackIgnore: true */ u);
+    _pdfjs = Promise.all([importar(PDFJS_CDN + "pdf.min.mjs"), importar(PDFJS_CDN + "pdf.worker.min.mjs")])
+      .then(([lib, worker]) => {
+        globalThis.pdfjsWorker = worker;
+        try { lib.GlobalWorkerOptions.workerSrc = PDFJS_CDN + "pdf.worker.min.mjs"; } catch {}
+        return lib;
+      })
+      .catch((e) => { _pdfjs = null; throw Object.assign(new Error("sem-pdfjs"), { causa: e }); });
+  }
+  return _pdfjs;
+}
 async function textoDePDF(buffer, nome) {
+  let lib;
+  try { lib = await carregarPdfjs(); }
+  catch (e) {
+    try { console.error("PDF:", e.causa || e); } catch {}
+    try { window.alert(`Para ler PDF ("${nome}") o Enlace baixa o leitor na hora, e isso precisa de internet. Conecte-se e importe de novo — ou converta para .docx/.txt.`); } catch {}
+    return { text: "", paginas: null };
+  }
   try {
-    window.alert("Este app não lê PDF (\"" + nome + "\") para se manter leve e abrir por duplo clique. Converta para .docx ou .txt e importe de novo.");
-  } catch {}
-  return { text: "", paginas: null };
+    const pdf = await lib.getDocument({ data: new Uint8Array(buffer), isEvalSupported: false, useSystemFonts: false }).promise;
+    const partes = [], paginas = [];
+    let pos = 0;
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const pg = await pdf.getPage(i);
+      const cont = await pg.getTextContent();
+      let t = "";
+      cont.items.forEach((it) => {
+        t += it.str || "";
+        if (it.hasEOL) t += "\n";
+        else if (it.str && !/\s$/.test(it.str)) t += " ";
+      });
+      const bloco = t.replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim() + "\n\n";
+      paginas.push({ n: i, inicio: pos, fim: pos + bloco.length });
+      partes.push(bloco); pos += bloco.length;
+    }
+    const text = partes.join("");
+    if (!text.trim()) { try { window.alert(`"${nome}" não tem texto selecionável — parece digitalizado (imagem). Passe um OCR antes de importar.`); } catch {} }
+    return { text, paginas };
+  } catch (e) {
+    try { console.error("PDF:", (e && (e.message || e.name)) || e); } catch {}
+    try { window.alert(`Não foi possível ler o PDF "${nome}". Se ele estiver protegido por senha ou corrompido, não há como extrair o texto.`); } catch {}
+    return { text: "", paginas: null };
+  }
 }
 // em que página do documento cai um deslocamento do texto
 function paginaDoOffset(doc, off) {
@@ -316,7 +360,7 @@ Participante: Eu definiria horários mais claros desde o início e combinaria co
 }
 const QHELP = [
   { h: "O que é", items: ["Módulo de análise qualitativa de texto. Apoia o ciclo geral da análise: codificação > categorização > interpretação."] },
-  { h: "Fluxo geral", items: ["1) Na aba Documentos, importe os textos do corpus (.txt, .docx) — vários de uma vez, se quiser. 2) Selecione um trecho e aplique um ou mais códigos; o livro de códigos vale para todos os documentos. 3) Agrupe os códigos em categorias. 4) Na aba Consultas, recupere os recortes de todo o corpus e compare grupos de documentos. 5) Veja o quantitativo (frequências, nuvem de palavras). 6) Escreva o metatexto."] },
+  { h: "Fluxo geral", items: ["1) Na aba Documentos, importe os textos do corpus (.txt, .docx, .pdf) — vários de uma vez, se quiser. 2) Selecione um trecho e aplique um ou mais códigos; o livro de códigos vale para todos os documentos. 3) Agrupe os códigos em categorias. 4) Na aba Consultas, recupere os recortes de todo o corpus e compare grupos de documentos. 5) Veja o quantitativo (frequências, nuvem de palavras). 6) Escreva o metatexto."] },
   { h: "As abas", items: [
     ["Codificação", "o texto fica à esquerda; selecione um trecho e marque com códigos (cores). Cada trecho marcado é um recorte (unidade de análise). Aqui também se renomeia e se mescla códigos."],
     ["Categorias", "crie categorias e associe códigos a elas. Categoria emergente nasce dos dados; a priori vem da teoria."],
@@ -324,7 +368,7 @@ const QHELP = [
     ["Metatexto", "onde se escreve a interpretação, apoiada nos recortes. Pode vincular a uma categoria."],
   ] },
   { h: "Importar texto e buscar", items: [
-    ["Importar documentos", "pela aba Documentos ou pelo botão no cabeçalho do texto: .txt e .docx (Word). Cada arquivo vira um documento do corpus e o nome do arquivo vira o nome dele — importar NÃO substitui nem apaga o que já foi codificado."],
+    ["Importar documentos", "pela aba Documentos ou pelo botão no cabeçalho do texto: .txt, .docx (Word) e .pdf. Cada arquivo vira um documento do corpus e o nome do arquivo vira o nome dele — importar NÃO substitui nem apaga o que já foi codificado. Em PDF, a página de cada trecho é preservada e aparece nas Consultas; o leitor de PDF é baixado na hora, então importar .pdf precisa de internet."],
     ["Buscar", "o campo de busca destaca as ocorrências no texto; use ‹ › (ou Enter / Shift+Enter) para navegar e ✕ para limpar."],
   ] },
   { h: "Códigos e recortes", items: [
@@ -999,7 +1043,7 @@ function CodificacaoView(props) {
           <div style={{ margin: "auto", textAlign: "center", fontFamily: "system-ui", color: C.sub }}>
             <p style={{ marginBottom: 16, fontSize: 14 }}>Comece pelo material a analisar.</p>
             <label style={{ ...btnStyle(C), display: "inline-block", marginRight: 8, background: C.accent, color: "#fff", border: "none", padding: "8px 16px" }}>
-              Abrir arquivos (.txt, .docx)<input ref={fileRef} type="file" accept=".txt,.docx,text/plain" multiple onChange={onFile} style={{ display: "none" }} />
+              Abrir arquivos (.txt, .docx, .pdf)<input ref={fileRef} type="file" accept=".txt,.docx,.pdf,text/plain,application/pdf" multiple onChange={onFile} style={{ display: "none" }} />
             </label>
             <button onClick={() => setPasteMode(true)} style={{ ...btnStyle(C), padding: "8px 16px" }}>Colar texto</button>
           </div>
@@ -1035,8 +1079,8 @@ function CodificacaoView(props) {
             <div style={{ padding: "6px 12px", fontFamily: "system-ui", fontSize: 11, color: C.sub, borderBottom: `1px solid ${C.line}`, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
               <span>{textoDe(project).length} caracteres</span>
               <span>{project.excerpts.length} recortes</span>
-              <label style={{ ...btnStyle(C), padding: "3px 9px", fontSize: 11, cursor: "pointer" }} title="acrescentar documentos ao corpus (.txt, .docx)">
-                + Documentos<input type="file" accept=".txt,.docx,text/plain" multiple onChange={onFile} style={{ display: "none" }} />
+              <label style={{ ...btnStyle(C), padding: "3px 9px", fontSize: 11, cursor: "pointer" }} title="acrescentar documentos ao corpus (.txt, .docx, .pdf)">
+                + Documentos<input type="file" accept=".txt,.docx,.pdf,text/plain,application/pdf" multiple onChange={onFile} style={{ display: "none" }} />
               </label>
               <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 4 }}>
                 <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="buscar no texto…"
@@ -1396,8 +1440,8 @@ function CorpusView({ project, C, addDocs, renameDoc, removeDoc, abrirDoc, setAt
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
         <div style={{ fontWeight: 700, fontSize: 14 }}>Documentos do projeto</div>
         <span style={{ fontSize: 11.5, color: C.sub }}>{docs.length} documento(s) · {(project.excerpts || []).length} recortes no total</span>
-        <label style={btnStyle(C)}>+ Documentos (.txt, .docx)
-          <input type="file" accept=".txt,.docx,text/plain" multiple onChange={onFile} style={{ display: "none" }} />
+        <label style={btnStyle(C)}>+ Documentos (.txt, .docx, .pdf)
+          <input type="file" accept=".txt,.docx,.pdf,text/plain,application/pdf" multiple onChange={onFile} style={{ display: "none" }} />
         </label>
         <Btn onClick={() => addDocs([{ name: "Documento " + (docs.length + 1), text: "" }])}>+ vazio</Btn>
       </div>
