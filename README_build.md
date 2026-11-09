@@ -117,7 +117,7 @@ As suítes em `testes/` carregam o **arquivo único já construído** num DOM
 (jsdom) e clicam na interface como um usuário: trocam de aba, abrem projetos
 de `testes/fixtures/` pelo botão Abrir (a Análise Qualitativa não tem mais
 exemplos embutidos), importam arquivos, editam células e conferem os números
-que aparecem na tela. São 143 verificações cobrindo a estrutura das janelas, a revisão com
+que aparecem na tela. São 147 verificações cobrindo a estrutura das janelas, a revisão com
 PRISMA, o corpus de vários documentos, a ida e volta do REFI-QDA, a busca no
 corpus, o comportamento quando o navegador recusa gravar (`07-armazenamento.mjs` finge a cota estourando) e os 11 tipos de
 gráfico da janela quantitativa (`09-graficos.mjs`, caracterização feita para

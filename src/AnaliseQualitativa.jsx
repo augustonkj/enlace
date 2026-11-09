@@ -373,7 +373,7 @@ const QHELP = [
     ["REFI-QDA (.qde)", "o botão .qde exporta no formato de intercâmbio REFI-QDA, que NVivo, MAXQDA e ATLAS.ti abrem; o botão Abrir aceita .qde e .qdc de volta. Serve para não ficar preso a nenhum programa — inclusive a este."],
     ["Salvar Enlace", "no topo do programa, salva e restaura num único arquivo o trabalho das duas ferramentas (diagrama + análise textual)."],
     ["Compartilhar", "gera um HTML do projeto para leitura."],
-    ["Relatório", "documento com o texto codificado, os códigos, as categorias e os metatextos."],
+    ["Relatório PDF", "só os resultados: frequência dos códigos, categorias, co-ocorrências, palavras mais frequentes, algumas citações por código, o metatexto e a lista dos documentos. O texto integral dos documentos não entra."],
   ] },
   { h: "Salvamento", items: ["O trabalho é salvo automaticamente no navegador. Para levar a outro computador, use Salvar (.json) ou Salvar Enlace (backup completo)."] },
 ];
@@ -427,52 +427,109 @@ function escapeHTML(s) {
 }
 
 // gera um HTML autocontido (somente leitura) que abre em qualquer navegador
+/* Relatório: só os RESULTADOS da análise. O material integral (o texto de cada
+   documento) fica de fora — ele está nos arquivos de origem e só inchava o PDF.
+   Os recortes aparecem como citações ilustrativas, poucas por código. */
+const CITACOES_POR_CODIGO = 3;
 function buildStandaloneHTML(project, opts = {}) {
-  const codeMap = Object.fromEntries(project.codes.map((c) => [c.id, c]));
-  // um bloco por documento do corpus, cada um com o próprio texto codificado
-  const marcar = (segs) => segs.map((seg) => {
-    const c0 = seg.covering[0] ? codeMap[seg.covering[0].codeIds[0]] : null;
-    const names = seg.covering.flatMap((e) => e.codeIds.map((id) => codeMap[id]?.name)).filter(Boolean).join(", ");
-    const style = c0 ? `background:${c0.color}33;border-bottom:2px solid ${c0.color};` : "";
-    const title = names ? ` title="${escapeHTML(names)}"` : "";
-    return `<span style="${style}border-radius:2px"${title}>${escapeHTML(seg.text)}</span>`;
-  }).join("");
+  const E = escapeHTML;
   const docs = docsDe(project);
-  const varios = docs.length > 1;
-  const textHTML = docs.map((d) => {
-    const corpo = marcar(buildSegments(d.text || "", exDoDoc(project, d.id)));
-    const attrs = Object.entries(d.attrs || {}).filter(([, v]) => String(v).trim());
-    const cab = varios
-      ? `<h3 style="margin:18px 0 4px;font-size:15px;border-bottom:1px solid #e3e9ee;padding-bottom:3px">${escapeHTML(d.name)} <span style="font-weight:400;color:#999;font-size:12px">(${exDoDoc(project, d.id).length} recortes${d.paginas ? ` · ${d.paginas.length} páginas` : ""})</span></h3>`
-        + (attrs.length ? `<div style="font-size:12px;color:#777;margin-bottom:4px">${attrs.map(([k, v]) => `${escapeHTML(k)}: ${escapeHTML(v)}`).join(" · ")}</div>` : "")
-      : "";
-    return cab + corpo;
-  }).join("");
-  const codeRows = project.codes.map((c) => {
-    const n = project.excerpts.filter((e) => e.codeIds.includes(c.id)).length;
-    return `<li style="margin:3px 0"><span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:${c.color};margin-right:6px;vertical-align:middle"></span>${escapeHTML(c.name)} <b>(${n})</b></li>`;
-  }).join("");
+  const docMap = Object.fromEntries(docs.map((d) => [d.id, d]));
+  const exs = project.excerpts || [];
+  const total = exs.length;
+  const pct = (n) => (total ? ((n / total) * 100).toFixed(1).replace(".", ",") + "%" : "—");
+  const h2 = (t) => `<h2 style="border-bottom:1px solid #e3e9ee;padding-bottom:4px;margin:30px 0 10px;font-size:18px">${t}</h2>`;
+  const th = (t, al = "left") => `<th style="text-align:${al};padding:5px 8px;background:#f4f7f9;border-bottom:1px solid #e3e9ee;font-size:12px">${t}</th>`;
+  const td = (t, al = "left") => `<td style="text-align:${al};padding:5px 8px;border-bottom:1px solid #eef1f4;vertical-align:top">${t}</td>`;
+  const tabela = (cab, linhas) => `<table style="border-collapse:collapse;width:100%;font-size:13px">${"<tr>" + cab.join("") + "</tr>"}${linhas.join("")}</table>`;
+  const bola = (cor) => `<span style="display:inline-block;width:11px;height:11px;border-radius:3px;background:${cor};margin-right:6px;vertical-align:-1px"></span>`;
+
+  // códigos: frequência, % e em quantos documentos aparecem
+  const freq = project.codes.map((c) => {
+    const seus = exs.filter((e) => (e.codeIds || []).includes(c.id));
+    return { c, n: seus.length, nDocs: new Set(seus.map((e) => e.docId)).size, seus };
+  }).sort((x, y) => y.n - x.n);
+  const maxN = Math.max(1, ...freq.map((f) => f.n));
+  const tabCodigos = freq.length ? tabela(
+    [th("Código"), th("Recortes", "right"), th("% dos recortes", "right"), th("Documentos", "right"), th("")],
+    freq.map(({ c, n, nDocs }) => "<tr>" + td(bola(c.color) + `<b>${E(c.name)}</b>` + (c.desc ? `<div style="color:#777;font-size:12px;margin-top:2px">${E(c.desc)}</div>` : ""))
+      + td(n, "right") + td(pct(n), "right") + td(`${nDocs}${docs.length > 1 ? ` de ${docs.length}` : ""}`, "right")
+      + td(`<div style="width:120px;height:9px;background:#eef1f4;border-radius:4px"><div style="width:${(n / maxN) * 100}%;height:100%;background:${c.color};border-radius:4px"></div></div>`) + "</tr>")
+  ) : "<p>—</p>";
+
+  // categorias
   const catBlocks = project.categories.map((cat) => {
     const codes = project.codes.filter((c) => cat.codeIds.includes(c.id));
-    const exs = project.excerpts.filter((e) => e.codeIds.some((id) => cat.codeIds.includes(id)));
-    const chips = codes.map((c) => `<span style="background:${c.color};color:#fff;padding:2px 8px;border-radius:10px;font-size:12px;margin:2px;display:inline-block">${escapeHTML(c.name)}</span>`).join("");
-    return `<div style="margin-bottom:16px"><h3 style="margin:0 0 4px">${escapeHTML(cat.name)} <span style="font-weight:400;color:#999;font-size:13px">(${cat.tipo} · ${exs.length} recortes)</span></h3>${cat.desc ? `<p style="margin:0 0 6px;color:#555">${escapeHTML(cat.desc)}</p>` : ""}<div>${chips}</div></div>`;
+    const n = exs.filter((e) => (e.codeIds || []).some((id) => cat.codeIds.includes(id))).length;
+    const chips = codes.map((c) => `<span style="background:${c.color};color:#fff;padding:2px 8px;border-radius:10px;font-size:12px;margin:2px;display:inline-block">${E(c.name)}</span>`).join("");
+    return `<div style="margin-bottom:14px;page-break-inside:avoid"><h3 style="margin:0 0 4px;font-size:15px">${E(cat.name)} <span style="font-weight:400;color:#999;font-size:12.5px">(${E(cat.tipo || "")} · ${n} recortes · ${pct(n)})</span></h3>${cat.desc ? `<p style="margin:0 0 6px;color:#555;font-size:13.5px">${E(cat.desc)}</p>` : ""}<div>${chips || '<i style="color:#999;font-size:12px">sem códigos</i>'}</div></div>`;
   }).join("");
-  const metaBlocks = project.metatexts.map((m) => `<div style="margin-bottom:18px"><h3 style="margin:0 0 6px">${escapeHTML(m.title)}</h3><p style="white-space:pre-wrap;line-height:1.7;margin:0">${escapeHTML(m.body)}</p></div>`).join("");
+
+  // co-ocorrências (dois códigos no mesmo recorte)
+  const pares = {};
+  exs.forEach((e) => {
+    const ids = [...new Set(e.codeIds || [])];
+    for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) {
+      const k = [ids[i], ids[j]].sort().join("|"); pares[k] = (pares[k] || 0) + 1;
+    }
+  });
+  const nome = Object.fromEntries(project.codes.map((c) => [c.id, c]));
+  const topPares = Object.entries(pares).sort((x, y) => y[1] - x[1]).slice(0, 15).filter(([k]) => k.split("|").every((id) => nome[id]));
+  const tabCooc = topPares.length ? tabela([th("Códigos"), th("Recortes em comum", "right")],
+    topPares.map(([k, n]) => { const [a, b] = k.split("|").map((id) => nome[id]); return "<tr>" + td(bola(a.color) + E(a.name) + " &nbsp;+&nbsp; " + bola(b.color) + E(b.name)) + td(n, "right") + "</tr>"; })) : "";
+
+  // palavras mais frequentes do corpus (respeita as palavras excluídas na aba Quantitativo)
+  const fora = new Set((project.wordExclude || []).map((w) => w.toLowerCase()));
+  const cont = {};
+  for (const w of textoTodo(project).toLowerCase().match(/[\p{L}]+/gu) || []) {
+    if (w.length < 3 || STOPWORDS_PT.has(w) || fora.has(w)) continue;
+    cont[w] = (cont[w] || 0) + 1;
+  }
+  const palavras = Object.entries(cont).sort((x, y) => y[1] - x[1]).slice(0, 25);
+
+  // corpus: só a ficha de cada documento, sem o texto
+  const tabDocs = docs.length ? tabela([th("Documento"), th("Atributos"), th("Recortes", "right")],
+    docs.map((d) => {
+      const at = Object.entries(d.attrs || {}).filter(([, v]) => String(v).trim()).map(([k, v]) => `${E(k)}: ${E(v)}`).join(" · ");
+      return "<tr>" + td(E(d.name) + (d.paginas ? ` <span style="color:#999;font-size:12px">(${d.paginas.length} p.)</span>` : "")) + td(at || '<span style="color:#bbb">—</span>') + td(exDoDoc(project, d.id).length, "right") + "</tr>";
+    })) : "<p>—</p>";
+
+  // citações ilustrativas
+  const citacoes = freq.filter((f) => f.n).map(({ c, n, seus }) => {
+    const itens = seus.slice(0, CITACOES_POR_CODIGO).map((e) => {
+      const d = docMap[e.docId];
+      const pg = d && paginaDoOffset(d, e.start);
+      const fonte = [docs.length > 1 && d ? E(d.name) : "", pg ? "p. " + pg : ""].filter(Boolean).join(", ");
+      const txt = (e.text || "").replace(/\s+/g, " ").trim();
+      return `<blockquote style="margin:6px 0;padding:4px 12px;border-left:3px solid ${c.color};color:#444;font-size:13.5px">“${E(txt.length > 400 ? txt.slice(0, 400) + "…" : txt)}”${fonte ? ` <span style="color:#999;font-size:12px">(${fonte})</span>` : ""}</blockquote>`;
+    }).join("");
+    const resto = n - Math.min(n, CITACOES_POR_CODIGO);
+    return `<div style="margin-bottom:14px;page-break-inside:avoid"><div style="font-weight:700;font-size:14px">${bola(c.color)}${E(c.name)} <span style="font-weight:400;color:#999;font-size:12.5px">(${n})</span></div>${itens}${resto ? `<div style="color:#999;font-size:12px;margin-left:15px">+ ${resto} outro(s) recorte(s)</div>` : ""}</div>`;
+  }).join("");
+
+  const metaBlocks = project.metatexts.map((m) => {
+    const cat = m.categoryId && project.categories.find((k) => k.id === m.categoryId);
+    return `<div style="margin-bottom:18px"><h3 style="margin:0 0 6px;font-size:15px">${E(m.title)}${cat ? ` <span style="font-weight:400;color:#999;font-size:12.5px">(categoria: ${E(cat.name)})</span>` : ""}</h3><p style="white-space:pre-wrap;line-height:1.7;margin:0;font-size:14px">${E(m.body)}</p></div>`;
+  }).join("");
+
   const stamp = new Date().toLocaleDateString("pt-BR");
-  return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHTML(project.name)}</title>
-<style>@media print{.noprint{display:none!important}}@page{margin:18mm}</style></head>
+  const resumo = [[docs.length, "documentos"], [total, "recortes"], [project.codes.length, "códigos"], [project.categories.length, "categorias"]]
+    .map(([n, r]) => `<div style="flex:1;min-width:110px;border:1px solid #e3e9ee;border-radius:8px;padding:10px 12px"><div style="font-size:22px;font-weight:700;color:#1f7a8c">${n}</div><div style="font-size:12px;color:#777">${r}</div></div>`).join("");
+  return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${E(project.name)} — resultados</title>
+<style>@media print{.noprint{display:none!important}}@page{margin:18mm}tr{page-break-inside:avoid}</style></head>
 <body style="font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;color:#2b3a48;background:#ffffff;margin:0"${opts.print ? ' onload="setTimeout(function(){window.print()},300)"' : ""}>
 ${opts.print ? `<div class="noprint" style="position:sticky;top:0;display:flex;gap:10px;align-items:center;background:#1f7a8c;color:#fff;padding:10px 16px;font-family:system-ui">Relatório pronto. <button onclick="window.print()" style="border:none;background:#fff;color:#1f7a8c;font-weight:700;border-radius:6px;padding:6px 14px;cursor:pointer">Imprimir / Salvar como PDF</button><span style="font-size:12px;opacity:.85">escolha "Salvar como PDF" no destino da impressão</span></div>` : ""}
 <div style="max-width:880px;margin:0 auto;padding:34px 24px">
-<h1 style="margin:0 0 4px">${escapeHTML(project.name)}</h1>
-<p style="font-family:system-ui;color:#888;font-size:13px;margin:0 0 24px">${project.excerpts.length} recortes · ${project.codes.length} códigos · ${project.categories.length} categorias · exportado em ${stamp}</p>
-<h2 style="border-bottom:1px solid #e3e9ee;padding-bottom:4px">Texto (Codificação)</h2>
-<div style="font-size:16px;line-height:1.9;white-space:pre-wrap;background:#fff;padding:20px;border:1px solid #e3e9ee;border-radius:6px">${textHTML || "<i>(sem texto)</i>"}</div>
-<h2 style="border-bottom:1px solid #e3e9ee;padding-bottom:4px;margin-top:28px">Códigos</h2>
-<ul style="font-family:system-ui;font-size:14px;list-style:none;padding:0">${codeRows || "<li>—</li>"}</ul>
-<h2 style="border-bottom:1px solid #e3e9ee;padding-bottom:4px;margin-top:28px">Categorias</h2>${catBlocks || "<p>—</p>"}
-<h2 style="border-bottom:1px solid #e3e9ee;padding-bottom:4px;margin-top:28px">Metatexto</h2>${metaBlocks || "<p>—</p>"}
+<h1 style="margin:0 0 4px">${E(project.name)}</h1>
+<p style="color:#888;font-size:13px;margin:0 0 16px">Resultados da análise · exportado em ${stamp}</p>
+<div style="display:flex;gap:10px;flex-wrap:wrap">${resumo}</div>
+${h2("Códigos")}${tabCodigos}
+${h2("Categorias")}${catBlocks || "<p>—</p>"}
+${tabCooc ? h2("Co-ocorrências") + '<p style="color:#777;font-size:12.5px;margin:0 0 8px">Pares de códigos aplicados ao mesmo recorte.</p>' + tabCooc : ""}
+${palavras.length ? h2("Palavras mais frequentes") + `<p style="font-size:13.5px;line-height:2">${palavras.map(([w, n]) => `<span style="background:#f4f7f9;border-radius:4px;padding:2px 7px;margin-right:4px;white-space:nowrap">${E(w)} <b>${n}</b></span>`).join(" ")}</p>` : ""}
+${citacoes ? h2("Citações ilustrativas") + `<p style="color:#777;font-size:12.5px;margin:0 0 8px">Até ${CITACOES_POR_CODIGO} recortes por código.</p>` + citacoes : ""}
+${h2("Metatexto")}${metaBlocks || "<p>—</p>"}
+${h2("Corpus analisado")}${tabDocs}
 </div></body></html>`;
 }
 

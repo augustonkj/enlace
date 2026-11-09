@@ -49,6 +49,15 @@ await click(nav("Pular"));
 await click(nav("Texto"), 800);
 await abrirFixture("texto-entrevista.json", 1200);
 
+// --- Relatório PDF: só resultados, sem o material integral
+let rel = "";
+W.open = () => ({ document: { open() {}, write(h) { rel += h; }, close() {} } });
+await click(pb(/^Relatório PDF$/), 500);
+ok(/Códigos/.test(rel) && /Categorias/.test(rel) && /Citações ilustrativas/.test(rel), "relatório traz os resultados");
+ok(/25,0%/.test(rel), "frequência em % dos recortes");
+ok(!/Entrevistador: Como foi para você começar/.test(rel), "relatório NÃO traz o texto integral do documento");
+ok(rel.length < 40000, `relatório enxuto (${rel.length} bytes)`);
+
 // --- exportar .qde
 await click(pb(/^\.qde$/), 900);
 ok(!!cap, "botão .qde gerou arquivo");
