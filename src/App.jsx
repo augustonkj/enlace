@@ -5,6 +5,7 @@ import { AnaliseQualitativa } from "./AnaliseQualitativa.jsx";
 import { AnaliseQuantitativa } from "./AnaliseQuantitativa.jsx";
 import { DiagramaGeral } from "./DiagramaGeral.jsx";
 import { RevisaoLiteratura } from "./RevisaoLiteratura.jsx";
+import { PainelLicencas } from "./Licencas.jsx";
 
 /* ===== Casca: seletor de ferramentas ===== */
 const TOURQ = [
@@ -51,6 +52,7 @@ export default function App() {
   const tourQRef = useRef(null);
   const aboutRef = useRef(null);
   const [showAbout, setShowAbout] = useState(false);
+  const [abaSobre, setAbaSobre] = useState("sobre"); // "sobre" | "licencas"
   const [msg, setMsg] = useState("");
   useModalTrap(tourQ >= 0, tourQRef, finishTourQ);
   useModalTrap(showAbout, aboutRef, () => setShowAbout(false));
@@ -193,6 +195,16 @@ export default function App() {
               <button onClick={() => setShowAbout(false)} aria-label="Fechar" style={{ ...miniBtn, padding: "4px 10px", lineHeight: 1 }}>✕</button>
             </div>
 
+            <div role="tablist" aria-label="Sobre o Enlace" style={{ display: "flex", gap: 2, borderBottom: "1px solid #e3e9ee", marginBottom: 14 }}>
+              {[["sobre", "Sobre"], ["licencas", "Licenças e referências"]].map(([v, l]) => (
+                <button key={v} role="tab" aria-selected={abaSobre === v} onClick={() => setAbaSobre(v)}
+                  style={{ border: "none", background: "transparent", padding: "7px 12px", fontSize: 13, fontWeight: 600, cursor: "pointer", color: abaSobre === v ? "#1f7a8c" : "#6b7c8a", borderBottom: `2px solid ${abaSobre === v ? "#1f7a8c" : "transparent"}`, marginBottom: -1 }}>{l}</button>
+              ))}
+            </div>
+
+            {abaSobre === "licencas" && <PainelLicencas />}
+            {abaSobre === "sobre" && (<>
+
             <h3 style={{ margin: "0 0 6px", fontSize: 13, color: "#1f7a8c", textTransform: "uppercase", letterSpacing: ".5px" }}>Sobre o software</h3>
             <p style={{ margin: "0 0 10px", fontSize: 13.5, color: "#46555f", lineHeight: 1.6 }}>
               O Enlace reúne três janelas para pesquisa qualitativa e quantitativa. A Análise Qualitativa abriga três ferramentas: Texto (codificação em códigos e categorias), Revisão (tabela de referências e diagrama do fluxo da seleção, no formato PRISMA) e Ator-Rede (a rede de actantes da Teoria Ator-Rede, em tabela e em diagrama). Ao lado ficam o Mapa conceitual e a Análise Quantitativa (testes estatísticos).
@@ -238,8 +250,10 @@ export default function App() {
             ))}
 
             <div style={{ borderTop: "1px solid #eef2f5", marginTop: 18, paddingTop: 12, fontSize: 11.5, color: "#7a8b99", lineHeight: 1.6 }}>
-              © 2026 Enlace. Software livre para uso acadêmico e educacional.
+              © 2026 Enlace. Uso livre para fins acadêmicos e educacionais, não comerciais (CC BY-NC 4.0).{" "}
+              <button onClick={() => setAbaSobre("licencas")} style={{ border: "none", background: "transparent", color: "#1f7a8c", cursor: "pointer", padding: 0, fontSize: 11.5 }}>Licenças e referências</button>
             </div>
+            </>)}
 
             <div style={{ display: "flex", marginTop: 16 }}>
               <div style={{ flex: 1 }} />

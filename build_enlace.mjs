@@ -15,7 +15,7 @@
  *   2) embute o mammoth como UMD (continua sendo usado como window.mammoth);
  *   3) escreve um HTML único, offline, que abre por duplo clique.
  */
-import { readFileSync, writeFileSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import * as esbuild from "esbuild";
@@ -48,12 +48,51 @@ const result = await esbuild.build({
   jsx: "transform", // clássico: React.createElement (cada arquivo .jsx importa React)
   loader: { ".js": "jsx" }, // lib.js contém JSX (componente Hint)
   minify: true,
-  legalComments: "none",
+  legalComments: "none", // os avisos de licença vão inteiros na aba Licenças (ver coletarLicencas)
+  metafile: true,
   write: false,
   define: { "process.env.NODE_ENV": '"production"' },
   logLevel: "warning",
 });
 const app = esc(result.outputFiles[0].text);
+
+// Licenças: todo pacote que entra no arquivo (pelo bundle ou pelo UMD do
+// mammoth, com as dependências dele) leva o próprio texto de licença, que o
+// app mostra em Sobre › Licenças e referências. MIT/ISC/BSD exigem que o aviso
+// de copyright acompanhe o software; como o bundle é minificado, ele vai aqui.
+// pacotes sem arquivo LICENSE costumam trazer a licença numa seção do README
+function licencaDoReadme(dir) {
+  const rd = readdirSync(dir).find((f) => /^readme(\.md|\.markdown)?$/i.test(f));
+  if (!rd) return "";
+  const m = readFileSync(join(dir, rd), "utf8").match(/^#{1,3}\s*licen[cs]e\b[^\n]*\n([\s\S]*?)(?=^#{1,3}\s|(?![\s\S]))/im);
+  return m ? m[1].replace(/&lt;/g, "<").replace(/&gt;/g, ">").trim() : "";
+}
+function coletarLicencas(metafile) {
+  const nomes = new Set();
+  for (const o of Object.values(metafile.outputs))
+    for (const i of Object.keys(o.inputs)) { const m = i.match(/node_modules\/((?:@[^/]+\/)?[^/]+)/); if (m) nomes.add(m[1]); }
+  const viaMammoth = (p, vistos = new Set()) => {
+    if (vistos.has(p) || !existsSync(join(NM, p, "package.json"))) return vistos;
+    vistos.add(p);
+    const j = JSON.parse(readFileSync(join(NM, p, "package.json"), "utf8"));
+    for (const d of Object.keys(j.dependencies || {})) viaMammoth(d, vistos);
+    return vistos;
+  };
+  for (const p of viaMammoth("mammoth")) nomes.add(p);
+  const ARQ = /^(licen[cs]e|copying)(\.(md|txt|markdown))?$|^licen[cs]e-mit(\.(md|txt))?$/i;
+  return [...nomes].sort().map((nome) => {
+    const dir = join(NM, nome);
+    const j = JSON.parse(readFileSync(join(dir, "package.json"), "utf8"));
+    const arq = readdirSync(dir).find((f) => ARQ.test(f));
+    const autor = typeof j.author === "string" ? j.author : (j.author && j.author.name) || "";
+    let url = j.homepage || (j.repository && (j.repository.url || j.repository)) || "";
+    url = String(url).replace(/^git\+/, "").replace(/^git:\/\//, "https://").replace(/\.git$/, "");
+    if (/^[\w.-]+\/[\w.-]+$/.test(url)) url = "https://github.com/" + url;
+    return { nome, versao: j.version, licenca: j.license || "", autor: autor.replace(/\s*<[^>]*>/, ""), url,
+      texto: arq ? readFileSync(join(dir, arq), "utf8").trim() : licencaDoReadme(dir) };
+  });
+}
+const licencas = coletarLicencas(result.metafile);
 
 // 2: mammoth como UMD embutido (usado como window.mammoth na importação de .docx)
 const mammoth = esc(readFileSync(join(NM, "mammoth/mammoth.browser.min.js"), "utf8"));
@@ -75,6 +114,7 @@ const html = `<!doctype html>
 <script>
 window.addEventListener("error",function(e){var b=document.getElementById("errbox");if(b){b.style.display="block";b.textContent="Erro:\\n"+(e.message||e.error||e)+"\\n"+((e.error&&e.error.stack)||"");}});
 </script>
+<script>window.ENLACE_LICENCAS=${esc(JSON.stringify(licencas))};</script>
 <script>${mammoth}</script>
 <script>try{ ${app} }catch(e){var b=document.getElementById("errbox");if(b){b.style.display="block";b.textContent="Erro ao iniciar o app:\\n"+(e.message||e)+"\\n"+(e.stack||"");}var l=document.getElementById("loadmsg");if(l)l.textContent="";}</script>
 </body></html>`;
