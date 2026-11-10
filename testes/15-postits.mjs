@@ -31,7 +31,7 @@ const arrastar = async (postit, coluna, { alt = false } = {}) => {
   await wait(500);
 };
 const coluna = (nome) => nome === null ? vis().querySelector('[data-coluna=""]')
-  : [...vis().querySelectorAll("[data-coluna]")].find((c) => [...c.querySelectorAll("input")].some((i) => i.value === nome));
+  : [...vis().querySelectorAll("[data-coluna]")].find((c) => [...c.querySelectorAll("input,textarea")].some((i) => i.value === nome));
 const ids = (col) => [...col.querySelectorAll("[data-recorte]")].map((p) => p.dataset.recorte);
 
 await click(nav("Pular"));
@@ -50,7 +50,7 @@ ok(ids(coluna(null)).length === 0, "pela associação de códigos, nenhum recort
 // nova categoria e arrastar um post-it que está lá "por código": vira cópia
 await click(pb(/categoria emergente/), 500);
 const alvoNome = "Organização do tempo";
-setInp([...coluna("Nova categoria").querySelectorAll("input")][0], alvoNome);
+{ const ta = coluna("Nova categoria").querySelector("textarea"); Object.getOwnPropertyDescriptor(W.HTMLTextAreaElement.prototype, "value").set.call(ta, alvoNome); ta.dispatchEvent(new W.Event("input", { bubbles: true })); }
 await wait(700);
 const p1 = coluna("Desafios da transição").querySelector("[data-recorte]");
 const id1 = p1.dataset.recorte;
