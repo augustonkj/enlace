@@ -115,7 +115,7 @@ function emptyProject(name = "Novo projeto") {
     atributos: [],    // nomes dos atributos declarados para os documentos
     codes: [],        // {id, name, color, desc}
     excerpts: [],     // {id, docId, start, end, text, codeIds:[], memo}
-    categories: [],   // {id, name, tipo:'emergente'|'apriori', desc, codeIds:[], excerptIds:[]}
+    categories: [],   // {id, name, tipo:'emergente'|'apriori', desc, codeIds:[], excerptIds:[], fora:[]}
     metatexts: [],    // {id, title, categoryId|null, body}
     wordExclude: [],  // palavras removidas da nuvem/frequentes
     updated: Date.now(),
@@ -239,9 +239,10 @@ const exDoDoc = (p, docId) => (p.excerpts || []).filter((e) => e.docId === docId
 const exDoAtual = (p) => exDoDoc(p, docAtualDe(p).id);
 const textoTodo = (p) => docsDe(p).map((d) => d.text || "").join("\n\n");
 /* Um recorte está numa categoria por dois caminhos: foi arrastado para ela
-   (cat.excerptIds) ou tem um código que a categoria agrupa (cat.codeIds).
+   (cat.excerptIds) ou tem um código que a categoria agrupa (cat.codeIds) —
+   a menos que tenha sido arrastado para fora dela (cat.fora).
    Todo lugar que conta ou lista recortes de uma categoria passa por aqui. */
-const porCodigo = (cat, e) => (e.codeIds || []).some((id) => (cat.codeIds || []).includes(id));
+const porCodigo = (cat, e) => (e.codeIds || []).some((id) => (cat.codeIds || []).includes(id)) && !(cat.fora || []).includes(e.id);
 const direto = (cat, e) => (cat.excerptIds || []).includes(e.id);
 const naCategoria = (cat, e) => direto(cat, e) || porCodigo(cat, e);
 const nomeDoc = (p, docId) => (docsDe(p).find((d) => d.id === docId) || {}).name || "—";
@@ -279,7 +280,8 @@ function exportarREFI(project) {
     const sel = exDoDoc(p, d.id).map((e) => {
       const cods = (e.codeIds || []).map((id) => `          <Coding guid="${guidDe("coding:" + e.id + ":" + id)}" creatingUser="${guidDe("user")}" creationDateTime="${agora}">\n            <CodeRef targetGUID="${guidDe("code:" + id)}"/>\n          </Coding>`).join("\n");
       const catsDiretas = (p.categories || []).filter((k) => direto(k, e)).map((k) => k.name);
-      const descSel = [(e.memo || "").trim(), catsDiretas.length ? "Categorias: " + catsDiretas.join("; ") : ""].filter(Boolean).join(" — ");
+      const catsFora = (p.categories || []).filter((k) => (k.fora || []).includes(e.id)).map((k) => k.name);
+      const descSel = [(e.memo || "").trim(), catsDiretas.length ? "Categorias: " + catsDiretas.join("; ") : "", catsFora.length ? "Fora de: " + catsFora.join("; ") : ""].filter(Boolean).join(" — ");
       const memo = descSel ? `\n          <Description>${xmlEsc(descSel)}</Description>` : "";
       return `        <PlainTextSelection guid="${guidDe("sel:" + e.id)}" name="${xmlEsc((e.text || "").slice(0, 60))}" startPosition="${e.start | 0}" endPosition="${e.end | 0}" creatingUser="${guidDe("user")}" creationDateTime="${agora}">${memo}\n${cods}\n        </PlainTextSelection>`;
     }).join("\n");
@@ -305,11 +307,19 @@ ${fontes}
   </Sources>${notas ? `\n  <Notes>\n${notas}\n  </Notes>` : ""}
 </Project>`;
 }
+// "nota — Categorias: a; b — Fora de: c" → { texto: "nota", cats: [a, b], fora: [c] }
 function separarCategorias(desc) {
-  const t = String(desc || "").trim();
-  const m = /(?:^|\s—\s)Categorias: ([^\n]+)$/.exec(t);
-  if (!m) return { texto: t, cats: [] };
-  return { texto: t.slice(0, m.index).trim(), cats: m[1].split(";").map((x) => x.trim()).filter(Boolean) };
+  const partes = String(desc || "").trim().split(" — ");
+  const lista = (u, rot) => u.slice(rot.length).split(";").map((x) => x.trim()).filter(Boolean);
+  let cats = [], fora = [];
+  while (partes.length) {
+    const u = partes[partes.length - 1].trim();
+    if (u.startsWith("Categorias: ")) cats = lista(u, "Categorias: ");
+    else if (u.startsWith("Fora de: ")) fora = lista(u, "Fora de: ");
+    else break;
+    partes.pop();
+  }
+  return { texto: partes.join(" — ").trim(), cats, fora };
 }
 function importarREFI(xml, nomeArquivo) {
   const doc = new DOMParser().parseFromString(xml, "text/xml");
@@ -322,7 +332,7 @@ function importarREFI(xml, nomeArquivo) {
   // na descrição do código (agrupa o código) e do recorte (recorte colocado nela)
   const catsPorNome = {};
   const categoria = (nome) => {
-    if (!catsPorNome[nome]) { catsPorNome[nome] = { id: uid(), name: nome, tipo: "emergente", desc: "", codeIds: [], excerptIds: [] }; p.categories.push(catsPorNome[nome]); }
+    if (!catsPorNome[nome]) { catsPorNome[nome] = { id: uid(), name: nome, tipo: "emergente", desc: "", codeIds: [], excerptIds: [], fora: [] }; p.categories.push(catsPorNome[nome]); }
     return catsPorNome[nome];
   };
   // códigos (o .qdc traz só isto)
@@ -348,9 +358,10 @@ function importarREFI(xml, nomeArquivo) {
       if (!codeIds.length || !(fim > ini)) return;
       const texto = (conteudo ? conteudo.textContent : "").slice(ini, fim);
       const dsel = pega(sel, "Description")[0];
-      const { texto: memo, cats } = separarCategorias(dsel ? dsel.textContent : "");
+      const { texto: memo, cats, fora } = separarCategorias(dsel ? dsel.textContent : "");
       const exId = uid();
       cats.forEach((nome) => categoria(nome).excerptIds.push(exId));
+      fora.forEach((nome) => categoria(nome).fora.push(exId));
       p.excerpts.push({ id: exId, docId, start: ini, end: fim, text: texto, codeIds, memo });
     });
   });
@@ -367,7 +378,7 @@ const QHELP = [
   { h: "Fluxo geral", items: ["1) Na aba Documentos, importe os textos do corpus (.txt, .docx, .pdf) — vários de uma vez, se quiser. 2) Selecione um trecho e aplique um ou mais códigos; o livro de códigos vale para todos os documentos. 3) Agrupe os códigos em categorias. 4) Na aba Consultas, recupere os recortes de todo o corpus e compare grupos de documentos. 5) Veja o quantitativo (frequências, nuvem de palavras). 6) Escreva o metatexto."] },
   { h: "As abas", items: [
     ["Codificação", "o texto fica à esquerda; selecione um trecho e marque com códigos (cores). Cada trecho marcado é um recorte (unidade de análise). Aqui também se renomeia e se mescla códigos."],
-    ["Categorias", "um quadro de post-its: cada recorte é um post-it. Arraste-o da pilha \u201cSem categoria\u201d para uma categoria, ou de uma categoria para outra (com Alt/Option, copia em vez de mover). Também dá para associar códigos inteiros a uma categoria: todos os recortes do código entram nela (post-its tracejados). Categoria emergente nasce dos dados; a priori vem da teoria."],
+    ["Categorias", "um quadro de post-its: cada recorte é um post-it. Arraste-o da pilha \u201cSem categoria\u201d para uma categoria, de uma categoria para outra, ou de volta para \u201cSem categoria\u201d (com Alt/Option, copia em vez de mover). Também dá para associar códigos inteiros a uma categoria: todos os recortes do código entram nela (post-its tracejados), e você pode arrastar qualquer um deles para fora. Categoria emergente nasce dos dados; a priori vem da teoria."],
     ["Quantitativo", "frequência de cada código e categoria, co-ocorrências, palavras frequentes e nuvem de palavras (com exportação em PNG/SVG)."],
     ["Metatexto", "onde se escreve a interpretação, apoiada nos recortes. Pode vincular a uma categoria."],
   ] },
@@ -829,14 +840,15 @@ function App({ active = true }) {
     setPending(null); setSelExcerpt(null); setTab("codificacao");
   }
   // quadro de post-its: tira o recorte de `deId` (a menos que seja cópia) e põe em `paraId`.
-  // paraId null = "Sem categoria". Um vínculo por código não sai daqui: só pela lista de códigos.
+  // paraId null = "Sem categoria". Se o recorte estava na origem por um código dela,
+  // ele vai para cat.fora: sai da categoria mesmo com o código ainda associado.
   function moverRecorte(exId, deId, paraId, copiar = false) {
     if (deId === paraId) return;
     update((p) => ({
       categories: p.categories.map((c) => {
-        const ids = c.excerptIds || [];
-        if (c.id === paraId) return ids.includes(exId) ? c : { ...c, excerptIds: [...ids, exId] };
-        if (c.id === deId && !copiar) return { ...c, excerptIds: ids.filter((x) => x !== exId) };
+        const ids = c.excerptIds || [], fora = c.fora || [];
+        if (c.id === paraId) return { ...c, excerptIds: ids.includes(exId) ? ids : [...ids, exId], fora: fora.filter((x) => x !== exId) };
+        if (c.id === deId && !copiar) return { ...c, excerptIds: ids.filter((x) => x !== exId), fora: fora.includes(exId) ? fora : [...fora, exId] };
         return c;
       }),
     }));
@@ -896,7 +908,7 @@ function App({ active = true }) {
       if (cat.desc) lines.push(cat.desc);
       const codes = project.codes.filter((c) => cat.codeIds.includes(c.id));
       codes.forEach((c) => {
-        const exs = project.excerpts.filter((e) => e.codeIds.includes(c.id));
+        const exs = project.excerpts.filter((e) => e.codeIds.includes(c.id) && naCategoria(cat, e));
         lines.push(`- **${c.name}** (${exs.length})`);
         exs.slice(0, 50).forEach((e) => lines.push(`  > ${e.text.replace(/\n/g, " ").trim()}`));
       });
@@ -1483,7 +1495,7 @@ function CategoriasView({ project, codeFreq, C, addCategory, updateCategory, rem
         <span style={{ marginLeft: "auto", fontFamily: "system-ui", fontSize: 11.5, color: C.sub }}>{semCat.length} recorte(s) e {codigosSemCat} código(s) sem categoria</span>
       </div>
       <div style={{ fontFamily: "system-ui", fontSize: 11.5, color: "#8795a1", marginBottom: 16 }}>
-        Arraste os post-its entre as colunas · <b>Alt/Option</b> copia · sem arrastar: clique e depois em <i>colocar aqui</i> · tracejado = está na categoria por um código dela · ⌘Z desfaz
+        Arraste os post-its entre as colunas · <b>Alt/Option</b> copia · sem arrastar: clique e depois em <i>colocar aqui</i> · tracejado = veio por um código da categoria · ⌘Z desfaz
       </div>
 
       {project.excerpts.length === 0 ? (

@@ -56,7 +56,13 @@ const p1 = coluna("Desafios da transição").querySelector("[data-recorte]");
 const id1 = p1.dataset.recorte;
 await arrastar(p1, coluna(alvoNome));
 ok(ids(coluna(alvoNome)).includes(id1), "arrastar põe o recorte na outra categoria");
-ok(ids(coluna("Desafios da transição")).includes(id1), "um recorte que está na categoria por código continua lá (tracejado)");
+ok(!ids(coluna("Desafios da transição")).includes(id1), "um post-it tracejado (veio por código) também sai ao ser arrastado");
+// e volta para Sem categoria, e de lá de volta para a categoria original
+await arrastar(coluna(alvoNome).querySelector(`[data-recorte="${id1}"]`), coluna(null));
+ok(ids(coluna(null)).includes(id1) && !ids(coluna(alvoNome)).includes(id1), "arrastar de volta para Sem categoria funciona");
+await arrastar(coluna(null).querySelector(`[data-recorte="${id1}"]`), coluna("Desafios da transição"));
+ok(ids(coluna("Desafios da transição")).includes(id1) && !ids(coluna(null)).includes(id1), "e de Sem categoria de volta para a categoria de origem");
+await arrastar(coluna("Desafios da transição").querySelector(`[data-recorte="${id1}"]`), coluna(alvoNome));
 
 // tirar o código c4/c5 de "Ganhos": os recortes dele vão para Sem categoria
 const g = coluna("Ganhos percebidos");
@@ -103,6 +109,8 @@ await click(pb(/^Salvar$/), 800);
 const salvo = cap ? JSON.parse(await cap.text()) : null;
 const cat = salvo && salvo.categories.find((c) => c.name === alvoNome);
 ok(!!cat && cat.excerptIds.includes(id1) && cat.excerptIds.includes(id2), "o .json salvo guarda os recortes de cada categoria");
+const des = salvo && salvo.categories.find((c) => c.name === "Desafios da transição");
+ok(!!des && (des.fora || []).includes(id1), "e os que foram tirados de uma categoria");
 
 // ida e volta pelo .qde (REFI-QDA): as categorias e os recortes colocados nelas voltam
 cap = null;
@@ -116,7 +124,7 @@ await wait(1500);
 await click(pb(/^Categorias$/), 700);
 const volta = coluna(alvoNome);
 ok(!!volta && ids(volta).length === 2, `reaberto, o .qde recria a categoria com os 2 recortes colocados nela (${volta ? ids(volta).length : "sem coluna"})`);
-ok(!!coluna("Desafios da transição") && ids(coluna("Desafios da transição")).length >= 3, "e as categorias que agrupam códigos");
+ok(!!coluna("Desafios da transição") && ids(coluna("Desafios da transição")).length === 4, `e as categorias por código, sem o recorte que foi tirado (${coluna("Desafios da transição") ? ids(coluna("Desafios da transição")).length : "-"})`);
 ok(![...vis().querySelectorAll("[data-recorte]")].some((p) => /Categorias:/.test(p.title)), "o texto 'Categorias:' não vaza para a nota do recorte");
 
 const f = errors.filter((s) => !/opaque origins/.test(s));
