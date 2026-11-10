@@ -30,7 +30,7 @@ await click([...dlg().querySelectorAll("button")].find((b) => b.textContent.trim
 const t = dlg().textContent;
 ok(/CC BY-NC 4\.0/.test(t), "mostra a licença do Enlace");
 ok(/pdf\.js/.test(t) && /Apache-2\.0/.test(t), "lista o pdf.js, carregado sob demanda");
-ok(/PRISMA 2020/.test(t) && /BARDIN/.test(t) && /LATOUR/.test(t) && /SIEGEL/.test(t) && /MOREIRA/.test(t), "lista as referências");
+ok(/PRISMA 2020/.test(t) && /REFI-QDA/.test(t) && /LATOUR/.test(t) && /SIEGEL/.test(t) && /MOREIRA/.test(t), "lista as referências");
 const ver = [...dlg().querySelectorAll("button")].find((b) => b.textContent.trim() === "ver licença");
 await click(ver);
 ok(/Permission is hereby granted|Redistribution and use|Permission to use, copy/.test(dlg().querySelector("pre")?.textContent || ""), "'ver licença' mostra o texto");

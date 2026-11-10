@@ -1,17 +1,17 @@
 import React, { useState, useRef, useMemo, useEffect, useCallback } from "react";
 import { SUITE, useModalTrap, BarrasH, marcarAlterado, useHistorico, useAtalhosDesfazer } from "./lib.js";
 
-/* ===== Módulo: Análise textual qualitativa (Codifica - Bardin / ATD) ===== */
+/* ===== Módulo: Análise textual qualitativa (codificação, categorias e metatexto) ===== */
 const AnaliseQualitativa = (() => {
 
 /*
   Codifica - análise qualitativa simples (tipo ATLAS, enxuto)
-  Suporta o ciclo comum a Bardin (codificação > categorização > inferência)
-  e à Análise Textual Discursiva de Moraes & Galiazzi (unitarização > categorização > metatexto).
+  Suporta o ciclo comum às análises qualitativas de texto (recortar e codificar >
+  categorizar > interpretar e escrever o metatexto), sem amarrar a um método.
 
   Fluxo: abrir/colar texto -> selecionar trecho -> aplicar código(s) ->
          agrupar códigos em categorias -> ver quantitativo -> escrever metatexto/inferência.
-  Tudo é salvo automaticamente (persistência do artefato) e pode ser exportado em JSON.
+  Nada fica no navegador: o trabalho é salvo pelo usuário em arquivo (JSON, .qde).
 */
 
 const PALETTE = [

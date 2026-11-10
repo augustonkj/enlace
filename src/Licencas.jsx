@@ -14,8 +14,6 @@ import React, { useState } from "react";
 
 const REFERENCIAS = [
   { area: "Análise textual", itens: [
-    "BARDIN, L. Análise de conteúdo. Lisboa: Edições 70, 1977.",
-    "MORAES, R.; GALIAZZI, M. C. Análise textual discursiva. Ijuí: Ed. Unijuí, 2007.",
     "REFI-QDA. REFI-QDA Standard: QDA-XML (projetos .qdpx/.qde e codebook .qdc). Rotterdam Exchange Format Initiative, 2019. Disponível em: https://www.qdasoftware.org.",
   ] },
   { area: "Revisão de literatura", itens: [
