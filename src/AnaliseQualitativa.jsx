@@ -115,7 +115,7 @@ function emptyProject(name = "Novo projeto") {
     atributos: [],    // nomes dos atributos declarados para os documentos
     codes: [],        // {id, name, color, desc}
     excerpts: [],     // {id, docId, start, end, text, codeIds:[], memo}
-    categories: [],   // {id, name, tipo:'emergente'|'apriori', desc, codeIds:[]}
+    categories: [],   // {id, name, tipo:'emergente'|'apriori', desc, codeIds:[], excerptIds:[]}
     metatexts: [],    // {id, title, categoryId|null, body}
     wordExclude: [],  // palavras removidas da nuvem/frequentes
     updated: Date.now(),
@@ -238,6 +238,12 @@ const textoDe = (p) => docAtualDe(p).text || "";
 const exDoDoc = (p, docId) => (p.excerpts || []).filter((e) => e.docId === docId);
 const exDoAtual = (p) => exDoDoc(p, docAtualDe(p).id);
 const textoTodo = (p) => docsDe(p).map((d) => d.text || "").join("\n\n");
+/* Um recorte está numa categoria por dois caminhos: foi arrastado para ela
+   (cat.excerptIds) ou tem um código que a categoria agrupa (cat.codeIds).
+   Todo lugar que conta ou lista recortes de uma categoria passa por aqui. */
+const porCodigo = (cat, e) => (e.codeIds || []).some((id) => (cat.codeIds || []).includes(id));
+const direto = (cat, e) => (cat.excerptIds || []).includes(e.id);
+const naCategoria = (cat, e) => direto(cat, e) || porCodigo(cat, e);
 const nomeDoc = (p, docId) => (docsDe(p).find((d) => d.id === docId) || {}).name || "—";
 
 /* ---- REFI-QDA (.qdc / .qde) — intercâmbio com NVivo, MAXQDA e ATLAS.ti ----
@@ -272,7 +278,9 @@ function exportarREFI(project) {
   const fontes = docsDe(p).map((d) => {
     const sel = exDoDoc(p, d.id).map((e) => {
       const cods = (e.codeIds || []).map((id) => `          <Coding guid="${guidDe("coding:" + e.id + ":" + id)}" creatingUser="${guidDe("user")}" creationDateTime="${agora}">\n            <CodeRef targetGUID="${guidDe("code:" + id)}"/>\n          </Coding>`).join("\n");
-      const memo = (e.memo || "").trim() ? `\n          <Description>${xmlEsc(e.memo)}</Description>` : "";
+      const catsDiretas = (p.categories || []).filter((k) => direto(k, e)).map((k) => k.name);
+      const descSel = [(e.memo || "").trim(), catsDiretas.length ? "Categorias: " + catsDiretas.join("; ") : ""].filter(Boolean).join(" — ");
+      const memo = descSel ? `\n          <Description>${xmlEsc(descSel)}</Description>` : "";
       return `        <PlainTextSelection guid="${guidDe("sel:" + e.id)}" name="${xmlEsc((e.text || "").slice(0, 60))}" startPosition="${e.start | 0}" endPosition="${e.end | 0}" creatingUser="${guidDe("user")}" creationDateTime="${agora}">${memo}\n${cods}\n        </PlainTextSelection>`;
     }).join("\n");
     const attrs = Object.entries(d.attrs || {}).filter(([, v]) => String(v).trim())
@@ -297,6 +305,12 @@ ${fontes}
   </Sources>${notas ? `\n  <Notes>\n${notas}\n  </Notes>` : ""}
 </Project>`;
 }
+function separarCategorias(desc) {
+  const t = String(desc || "").trim();
+  const m = /(?:^|\s—\s)Categorias: ([^\n]+)$/.exec(t);
+  if (!m) return { texto: t, cats: [] };
+  return { texto: t.slice(0, m.index).trim(), cats: m[1].split(";").map((x) => x.trim()).filter(Boolean) };
+}
 function importarREFI(xml, nomeArquivo) {
   const doc = new DOMParser().parseFromString(xml, "text/xml");
   if (doc.querySelector("parsererror")) return null;
@@ -304,13 +318,22 @@ function importarREFI(xml, nomeArquivo) {
   if (!raiz || !/^(Project|CodeBook)$/.test(raiz.localName)) return null;
   const pega = (el, nome) => [...el.getElementsByTagName("*")].filter((n) => n.localName === nome);
   const p = emptyProject((raiz.getAttribute("name") || nomeArquivo || "Projeto importado").slice(0, 60));
+  // categorias: o REFI-QDA não tem; o Enlace as grava como "… — Categorias: a; b"
+  // na descrição do código (agrupa o código) e do recorte (recorte colocado nela)
+  const catsPorNome = {};
+  const categoria = (nome) => {
+    if (!catsPorNome[nome]) { catsPorNome[nome] = { id: uid(), name: nome, tipo: "emergente", desc: "", codeIds: [], excerptIds: [] }; p.categories.push(catsPorNome[nome]); }
+    return catsPorNome[nome];
+  };
   // códigos (o .qdc traz só isto)
   const porGuid = {};
   pega(raiz, "Code").forEach((c, i) => {
     const id = uid();
     porGuid[c.getAttribute("guid")] = id;
     const d = pega(c, "Description")[0];
-    p.codes.push({ id, name: c.getAttribute("name") || "código " + (i + 1), color: corHex(c.getAttribute("color")) || PALETTE[i % PALETTE.length], desc: d ? d.textContent.trim() : "" });
+    const { texto: desc, cats } = separarCategorias(d ? d.textContent : "");
+    cats.forEach((nome) => categoria(nome).codeIds.push(id));
+    p.codes.push({ id, name: c.getAttribute("name") || "código " + (i + 1), color: corHex(c.getAttribute("color")) || PALETTE[i % PALETTE.length], desc });
   });
   // fontes de texto e seus recortes
   const docs = [];
@@ -324,8 +347,11 @@ function importarREFI(xml, nomeArquivo) {
       const codeIds = pega(sel, "CodeRef").map((r) => porGuid[r.getAttribute("targetGUID")]).filter(Boolean);
       if (!codeIds.length || !(fim > ini)) return;
       const texto = (conteudo ? conteudo.textContent : "").slice(ini, fim);
-      const memo = pega(sel, "Description")[0];
-      p.excerpts.push({ id: uid(), docId, start: ini, end: fim, text: texto, codeIds, memo: memo ? memo.textContent.trim() : "" });
+      const dsel = pega(sel, "Description")[0];
+      const { texto: memo, cats } = separarCategorias(dsel ? dsel.textContent : "");
+      const exId = uid();
+      cats.forEach((nome) => categoria(nome).excerptIds.push(exId));
+      p.excerpts.push({ id: exId, docId, start: ini, end: fim, text: texto, codeIds, memo });
     });
   });
   if (docs.length) { p.docs = docs; p.docAtual = docs[0].id; }
@@ -341,7 +367,7 @@ const QHELP = [
   { h: "Fluxo geral", items: ["1) Na aba Documentos, importe os textos do corpus (.txt, .docx, .pdf) — vários de uma vez, se quiser. 2) Selecione um trecho e aplique um ou mais códigos; o livro de códigos vale para todos os documentos. 3) Agrupe os códigos em categorias. 4) Na aba Consultas, recupere os recortes de todo o corpus e compare grupos de documentos. 5) Veja o quantitativo (frequências, nuvem de palavras). 6) Escreva o metatexto."] },
   { h: "As abas", items: [
     ["Codificação", "o texto fica à esquerda; selecione um trecho e marque com códigos (cores). Cada trecho marcado é um recorte (unidade de análise). Aqui também se renomeia e se mescla códigos."],
-    ["Categorias", "crie categorias e associe códigos a elas. Categoria emergente nasce dos dados; a priori vem da teoria."],
+    ["Categorias", "um quadro de post-its: cada recorte é um post-it. Arraste-o da pilha \u201cSem categoria\u201d para uma categoria, ou de uma categoria para outra (com Alt/Option, copia em vez de mover). Também dá para associar códigos inteiros a uma categoria: todos os recortes do código entram nela (post-its tracejados). Categoria emergente nasce dos dados; a priori vem da teoria."],
     ["Quantitativo", "frequência de cada código e categoria, co-ocorrências, palavras frequentes e nuvem de palavras (com exportação em PNG/SVG)."],
     ["Metatexto", "onde se escreve a interpretação, apoiada nos recortes. Pode vincular a uma categoria."],
   ] },
@@ -452,7 +478,7 @@ function buildStandaloneHTML(project, opts = {}) {
   // categorias
   const catBlocks = project.categories.map((cat) => {
     const codes = project.codes.filter((c) => cat.codeIds.includes(c.id));
-    const n = exs.filter((e) => (e.codeIds || []).some((id) => cat.codeIds.includes(id))).length;
+    const n = exs.filter((e) => naCategoria(cat, e)).length;
     const chips = codes.map((c) => `<span style="background:${c.color};color:#fff;padding:2px 8px;border-radius:10px;font-size:12px;margin:2px;display:inline-block">${E(c.name)}</span>`).join("");
     return `<div style="margin-bottom:14px;page-break-inside:avoid"><h3 style="margin:0 0 4px;font-size:15px">${E(cat.name)} <span style="font-weight:400;color:#999;font-size:12.5px">(${E(cat.tipo || "")} · ${n} recortes · ${pct(n)})</span></h3>${cat.desc ? `<p style="margin:0 0 6px;color:#555;font-size:13.5px">${E(cat.desc)}</p>` : ""}<div>${chips || '<i style="color:#999;font-size:12px">sem códigos</i>'}</div></div>`;
   }).join("");
@@ -785,7 +811,7 @@ function App({ active = true }) {
 
   // ---- categorias ----
   function addCategory(name = "Nova categoria", tipo = "emergente") {
-    update((p) => ({ categories: [...p.categories, { id: uid(), name, tipo, desc: "", codeIds: [] }] }));
+    update((p) => ({ categories: [...p.categories, { id: uid(), name, tipo, desc: "", codeIds: [], excerptIds: [] }] }));
   }
   function updateCategory(id, patch) {
     update((p) => ({ categories: p.categories.map((c) => c.id === id ? { ...c, ...patch } : c) }));
@@ -801,6 +827,19 @@ function App({ active = true }) {
     if (hasContent) { let ok = true; try { ok = window.confirm("Limpar este projeto? Texto, códigos, recortes, categorias e metatextos serão apagados (o nome é mantido)."); } catch {} if (!ok) return; }
     update(() => ({ text: "", codes: [], excerpts: [], categories: [], metatexts: [], wordExclude: [] }));
     setPending(null); setSelExcerpt(null); setTab("codificacao");
+  }
+  // quadro de post-its: tira o recorte de `deId` (a menos que seja cópia) e põe em `paraId`.
+  // paraId null = "Sem categoria". Um vínculo por código não sai daqui: só pela lista de códigos.
+  function moverRecorte(exId, deId, paraId, copiar = false) {
+    if (deId === paraId) return;
+    update((p) => ({
+      categories: p.categories.map((c) => {
+        const ids = c.excerptIds || [];
+        if (c.id === paraId) return ids.includes(exId) ? c : { ...c, excerptIds: [...ids, exId] };
+        if (c.id === deId && !copiar) return { ...c, excerptIds: ids.filter((x) => x !== exId) };
+        return c;
+      }),
+    }));
   }
   function toggleCodeInCategory(catId, codeId) {
     update((p) => ({
@@ -861,6 +900,11 @@ function App({ active = true }) {
         lines.push(`- **${c.name}** (${exs.length})`);
         exs.slice(0, 50).forEach((e) => lines.push(`  > ${e.text.replace(/\n/g, " ").trim()}`));
       });
+      const soltos = project.excerpts.filter((e) => direto(cat, e) && !porCodigo(cat, e));
+      if (soltos.length) {
+        lines.push(`- *recortes colocados na categoria* (${soltos.length})`);
+        soltos.slice(0, 50).forEach((e) => lines.push(`  > ${e.text.replace(/\n/g, " ").trim()}`));
+      }
       lines.push("");
     });
     if (project.metatexts.length) {
@@ -916,7 +960,7 @@ function App({ active = true }) {
   const catFreq = useMemo(() => {
     if (!project) return [];
     return project.categories.map((cat) => {
-      const exs = project.excerpts.filter((e) => e.codeIds.some((id) => cat.codeIds.includes(id)));
+      const exs = project.excerpts.filter((e) => naCategoria(cat, e));
       return { id: cat.id, name: cat.name, tipo: cat.tipo, codes: cat.codeIds.length, n: exs.length };
     });
   }, [project]);
@@ -1016,7 +1060,7 @@ function App({ active = true }) {
             pasteMode, setPasteMode, pasteVal, setPasteVal, applyPaste, fileRef, onFile, onMouseUp, abrirDoc, setTab }} />
         )}
         {tab === "categorias" && (
-          <CategoriasView {...{ project, codeFreq, C, addCategory, updateCategory, removeCategory, toggleCodeInCategory }} />
+          <CategoriasView {...{ project, codeFreq, C, addCategory, updateCategory, removeCategory, toggleCodeInCategory, moverRecorte }} />
         )}
         {tab === "quantitativo" && (
           <QuantitativoView {...{ project, codeFreq, catFreq, cooc, codeMap, C, excludeWord, includeWord }} />
@@ -1298,60 +1342,156 @@ function CodificacaoView(props) {
 }
 
 // ============ CATEGORIAS ============
-function CategoriasView({ project, codeFreq, C, addCategory, updateCategory, removeCategory, toggleCodeInCategory }) {
-  const assigned = new Set(project.categories.flatMap((c) => c.codeIds));
-  const livres = codeFreq.filter((c) => !assigned.has(c.id));
+/* ---- Categorias: quadro de post-its ----
+   Cada recorte é um post-it. Arrastar de uma coluna para outra move o recorte
+   (Alt/Option copia); soltar em "Sem categoria" tira da categoria de origem.
+   Sem arrastar (toque, teclado): clique no post-it e depois em "colocar aqui".
+   Recortes que estão numa categoria por causa de um código dela aparecem
+   tracejados: dali eles só saem tirando o código da categoria. */
+const TIPO_RECORTE = "application/x-enlace-recorte";
+const temRecorte = (ev) => Array.from((ev.dataTransfer && ev.dataTransfer.types) || []).includes(TIPO_RECORTE);
+
+function PostIt({ e, deId, project, codeMap, porCod, selecionado, onSelect }) {
+  const cods = (e.codeIds || []).map((id) => codeMap[id]).filter(Boolean);
+  const doc = nomeDoc(project, e.docId);
+  return (
+    <div draggable role="button" tabIndex={0} data-recorte={e.id} aria-pressed={selecionado}
+      onDragStart={(ev) => { ev.dataTransfer.setData(TIPO_RECORTE, JSON.stringify({ exId: e.id, deId })); ev.dataTransfer.effectAllowed = "copyMove"; }}
+      onClick={onSelect}
+      onKeyDown={(ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); onSelect(); } }}
+      title={`${(e.text || "").trim()}\n\n${doc}${cods.length ? " · " + cods.map((c) => c.name).join(", ") : ""}${porCod ? "\n(nesta categoria por um código dela)" : ""}`}
+      style={{ background: "#fff8c5", border: porCod ? "1px dashed #c4ad4e" : "1px solid #efe09a", borderRadius: 3, padding: "8px 9px 6px",
+        boxShadow: selecionado ? "0 0 0 2px #1f7a8c" : "0 1px 2px rgba(60,50,10,.14), 0 3px 8px rgba(60,50,10,.06)",
+        cursor: "grab", fontFamily: "system-ui", fontSize: 12, lineHeight: 1.45, color: "#3d3720", userSelect: "none" }}>
+      <div style={{ display: "-webkit-box", WebkitLineClamp: 5, WebkitBoxOrient: "vertical", overflow: "hidden", wordBreak: "break-word" }}>{(e.text || "").trim()}</div>
+      <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 6, fontSize: 10.5, color: "#8a7c3f" }}>
+        <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{doc}</span>
+        {porCod && <span style={{ fontStyle: "italic" }}>por código</span>}
+        {cods.slice(0, 5).map((c) => <span key={c.id} style={{ width: 8, height: 8, borderRadius: "50%", background: c.color, flexShrink: 0 }} />)}
+      </div>
+    </div>
+  );
+}
+
+// coluna que recebe post-its (id null = "Sem categoria")
+function ColunaRecortes({ id, alvo, setAlvo, onSoltar, sel, onColocar, C, style, children }) {
+  const realce = alvo === (id || "");
+  return (
+    <div data-coluna={id || ""}
+      onDragOver={(ev) => { if (!temRecorte(ev)) return; ev.preventDefault(); ev.dataTransfer.dropEffect = ev.altKey ? "copy" : "move"; if (!realce) setAlvo(id || ""); }}
+      onDragLeave={(ev) => { if (!ev.currentTarget.contains(ev.relatedTarget)) setAlvo(undefined); }}
+      onDrop={(ev) => { if (!temRecorte(ev)) return; ev.preventDefault(); setAlvo(undefined); onSoltar(ev, id); }}
+      style={{ background: realce ? "#eef6f8" : C.panel, border: `1px ${realce ? "dashed" : "solid"} ${realce ? "#1f7a8c" : C.line}`, borderRadius: 6, padding: 12, transition: "background .1s", ...style }}>
+      {children}
+      {sel && sel.deId !== id && (
+        <button onClick={onColocar} style={{ ...btnStyle(C), width: "100%", marginTop: 8, borderStyle: "dashed", color: "#1f7a8c" }}>colocar o recorte selecionado aqui</button>
+      )}
+    </div>
+  );
+}
+
+function CategoriasView({ project, codeFreq, C, addCategory, updateCategory, removeCategory, toggleCodeInCategory, moverRecorte }) {
+  const [busca, setBusca] = useState("");
+  const [sel, setSel] = useState(null);           // {exId, deId}: alternativa ao arrastar
+  const [alvo, setAlvo] = useState(undefined);    // coluna sob o arraste ("" = sem categoria)
+  const [codigosAbertos, setCodigosAbertos] = useState({});
+  const codeMap = useMemo(() => Object.fromEntries(project.codes.map((c) => [c.id, c])), [project.codes]);
+  const q = busca.trim().toLowerCase();
+  const visivel = (e) => !q || (e.text || "").toLowerCase().includes(q) || nomeDoc(project, e.docId).toLowerCase().includes(q);
+  const cats = project.categories;
+  const semCat = project.excerpts.filter((e) => !cats.some((c) => naCategoria(c, e)));
+  const codigosSemCat = codeFreq.filter((c) => !cats.some((k) => k.codeIds.includes(c.id))).length;
+
+  const soltar = (ev, paraId) => {
+    let d = null; try { d = JSON.parse(ev.dataTransfer.getData(TIPO_RECORTE)); } catch {}
+    if (d && d.exId) moverRecorte(d.exId, d.deId || null, paraId, ev.altKey);
+    setSel(null);
+  };
+  const colocar = (paraId) => { if (sel) moverRecorte(sel.exId, sel.deId, paraId, false); setSel(null); };
+  const escolher = (exId, deId) => setSel((s) => (s && s.exId === exId && s.deId === deId ? null : { exId, deId }));
+  const postIts = (lista, deId, cat) => lista.filter(visivel).map((e) => (
+    <PostIt key={e.id} e={e} deId={deId} project={project} codeMap={codeMap}
+      porCod={!!cat && porCodigo(cat, e) && !direto(cat, e)}
+      selecionado={!!sel && sel.exId === e.id && sel.deId === deId} onSelect={() => escolher(e.id, deId)} />
+  ));
+  const pilha = { display: "flex", flexDirection: "column", gap: 8, minHeight: 60 };
+  const titulo = { fontFamily: "system-ui", fontSize: 11, fontWeight: 700, color: C.sub, letterSpacing: ".4px", textTransform: "uppercase" };
+
   return (
     <div style={{ flex: 1, overflow: "auto", padding: 18 }}>
-      <div style={{ fontFamily: "system-ui", fontSize: 12.5, color: C.sub, lineHeight: 1.5, marginBottom: 12, background: C.panel, border: `1px solid ${C.line}`, borderRadius: 6, padding: "8px 10px" }}><b>Categorias:</b> Crie categorias e associe códigos a elas. Emergentes nascem dos dados; a priori vêm da teoria.</div>
-      <div style={{ display: "flex", gap: 8, marginBottom: 16, alignItems: "center" }}>
+      <div style={{ fontFamily: "system-ui", fontSize: 12.5, color: C.sub, lineHeight: 1.5, marginBottom: 12, background: C.panel, border: `1px solid ${C.line}`, borderRadius: 6, padding: "8px 10px" }}>
+        <b>Categorias:</b> cada recorte é um post-it. Arraste da pilha <i>Sem categoria</i> para uma categoria, ou entre categorias (com <b>Alt/Option</b> copia em vez de mover). Sem arrastar: clique no post-it e depois em <i>colocar aqui</i>. Associar um código à categoria leva todos os recortes dele (post-its tracejados). Desfazer: Ctrl/⌘+Z.
+      </div>
+      <div style={{ display: "flex", gap: 8, marginBottom: 14, alignItems: "center", flexWrap: "wrap" }}>
         <button onClick={() => addCategory("Nova categoria", "emergente")} style={{ ...btnStyle(C), background: C.accent, color: "#fff", border: "none" }}>+ categoria emergente</button>
         <button onClick={() => addCategory("Nova categoria", "apriori")} style={btnStyle(C)}>+ categoria a priori</button>
-        <span style={{ marginLeft: "auto", fontFamily: "system-ui", fontSize: 11, color: C.sub }}>{livres.length} código(s) sem categoria</span>
+        <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="filtrar post-its por texto ou documento…"
+          style={{ fontFamily: "system-ui", fontSize: 12, padding: "5px 8px", border: `1px solid ${C.line}`, borderRadius: 4, minWidth: 220 }} />
+        <span style={{ marginLeft: "auto", fontFamily: "system-ui", fontSize: 11, color: C.sub }}>{semCat.length} recorte(s) e {codigosSemCat} código(s) sem categoria</span>
       </div>
 
+      {project.excerpts.length === 0 ? (
+        <div style={{ fontFamily: "system-ui", fontSize: 13, color: C.sub, marginTop: 10 }}>Ainda não há recortes. Na aba Codificação, selecione trechos do texto e aplique códigos; eles aparecem aqui como post-its.</div>
+      ) : (
+        <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
+          <ColunaRecortes id={null} alvo={alvo} setAlvo={setAlvo} onSoltar={soltar} sel={sel} onColocar={() => colocar(null)} C={C}
+            style={{ width: 250, flexShrink: 0, position: "sticky", top: 0, maxHeight: "calc(88vh - 190px)", overflowY: "auto", boxSizing: "border-box" }}>
+            <div style={{ ...titulo, marginBottom: 8 }}>Sem categoria ({semCat.length})</div>
+            <div style={pilha}>
+              {postIts(semCat, null, null)}
+              {semCat.length === 0 && <div style={{ fontFamily: "system-ui", fontSize: 11.5, color: C.sub }}>Todos os recortes já estão em alguma categoria. Solte aqui para tirar um recorte da categoria.</div>}
+            </div>
+          </ColunaRecortes>
 
-      {/* códigos livres */}
-      {livres.length > 0 && (
-        <div style={{ marginBottom: 16, padding: 12, border: `1px dashed ${C.line}`, borderRadius: 6 }}>
-          <div style={{ fontFamily: "system-ui", fontSize: 11, color: C.sub, marginBottom: 8 }}>SEM CATEGORIA — clique para incluir na categoria desejada abaixo</div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-            {livres.map((c) => <span key={c.id} style={{ fontFamily: "system-ui", fontSize: 12, padding: "3px 8px", borderRadius: 10, background: c.color, color: "#fff" }}>{c.name} ({c.n})</span>)}
+          <div style={{ flex: 1, minWidth: 0, display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))", gap: 14, alignItems: "start" }}>
+            {cats.map((cat) => {
+              const dela = project.excerpts.filter((e) => naCategoria(cat, e));
+              const aberto = !!codigosAbertos[cat.id];
+              return (
+                <ColunaRecortes key={cat.id} id={cat.id} alvo={alvo} setAlvo={setAlvo} onSoltar={soltar} sel={sel} onColocar={() => colocar(cat.id)} C={C}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+                    <input value={cat.name} onChange={(e) => updateCategory(cat.id, { name: e.target.value })} aria-label="nome da categoria"
+                      style={{ flex: 1, minWidth: 0, fontFamily: "system-ui", fontSize: 14, fontWeight: 600, border: "none", background: "transparent" }} />
+                    <span style={{ fontFamily: "system-ui", fontSize: 11, color: C.sub }}>{dela.length}</span>
+                    <select value={cat.tipo} onChange={(e) => updateCategory(cat.id, { tipo: e.target.value })}
+                      style={{ fontFamily: "system-ui", fontSize: 10, border: `1px solid ${C.line}`, borderRadius: 4, padding: "2px 4px" }}>
+                      <option value="emergente">emergente</option>
+                      <option value="apriori">a priori</option>
+                    </select>
+                    <button onClick={() => removeCategory(cat.id)} title="excluir categoria" style={{ border: "none", background: "transparent", color: C.sub, cursor: "pointer", fontSize: 16 }}>×</button>
+                  </div>
+                  <textarea value={cat.desc} onChange={(e) => updateCategory(cat.id, { desc: e.target.value })} placeholder="definição da categoria…"
+                    style={{ width: "100%", fontFamily: "system-ui", fontSize: 12, padding: 6, border: `1px solid ${C.line}`, borderRadius: 4, resize: "vertical", minHeight: 34, boxSizing: "border-box", marginBottom: 6 }} />
+                  <button onClick={() => setCodigosAbertos((o) => ({ ...o, [cat.id]: !o[cat.id] }))}
+                    style={{ border: "none", background: "transparent", padding: 0, cursor: "pointer", fontFamily: "system-ui", fontSize: 11, color: C.sub, marginBottom: 6 }}>
+                    {aberto ? "▾" : "▸"} códigos da categoria ({cat.codeIds.length})
+                  </button>
+                  {aberto && (
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: 8 }}>
+                      {codeFreq.map((c) => {
+                        const inCat = cat.codeIds.includes(c.id);
+                        return (
+                          <button key={c.id} onClick={() => toggleCodeInCategory(cat.id, c.id)}
+                            style={{ fontFamily: "system-ui", fontSize: 11, padding: "3px 8px", borderRadius: 10, cursor: "pointer",
+                              border: `1px solid ${c.color}`, background: inCat ? c.color : "#fff", color: inCat ? "#fff" : c.color, opacity: inCat ? 1 : 0.55 }}>
+                            {c.name}
+                          </button>
+                        );
+                      })}
+                      {codeFreq.length === 0 && <span style={{ fontFamily: "system-ui", fontSize: 11, color: C.sub }}>nenhum código ainda</span>}
+                    </div>
+                  )}
+                  <div style={pilha}>
+                    {postIts(dela, cat.id, cat)}
+                    {dela.length === 0 && <div style={{ fontFamily: "system-ui", fontSize: 11.5, color: C.sub, border: `1px dashed ${C.line}`, borderRadius: 4, padding: "14px 8px", textAlign: "center" }}>arraste recortes para cá</div>}
+                  </div>
+                </ColunaRecortes>
+              );
+            })}
+            {cats.length === 0 && <div style={{ fontFamily: "system-ui", fontSize: 13, color: C.sub }}>Nenhuma categoria. Crie uma e arraste os recortes para ela.</div>}
           </div>
         </div>
       )}
-
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 14 }}>
-        {project.categories.map((cat) => (
-          <div key={cat.id} style={{ background: C.panel, border: `1px solid ${C.line}`, borderRadius: 6, padding: 14 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
-              <input value={cat.name} onChange={(e) => updateCategory(cat.id, { name: e.target.value })}
-                style={{ flex: 1, fontFamily: "system-ui", fontSize: 14, fontWeight: 600, border: "none", background: "transparent" }} />
-              <select value={cat.tipo} onChange={(e) => updateCategory(cat.id, { tipo: e.target.value })}
-                style={{ fontFamily: "system-ui", fontSize: 10, border: `1px solid ${C.line}`, borderRadius: 4, padding: "2px 4px" }}>
-                <option value="emergente">emergente</option>
-                <option value="apriori">a priori</option>
-              </select>
-              <button onClick={() => removeCategory(cat.id)} style={{ border: "none", background: "transparent", color: C.sub, cursor: "pointer", fontSize: 16 }}>×</button>
-            </div>
-            <textarea value={cat.desc} onChange={(e) => updateCategory(cat.id, { desc: e.target.value })} placeholder="definição da categoria…"
-              style={{ width: "100%", fontFamily: "system-ui", fontSize: 12, padding: 6, border: `1px solid ${C.line}`, borderRadius: 4, resize: "vertical", minHeight: 36, boxSizing: "border-box", marginBottom: 8 }} />
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
-              {codeFreq.map((c) => {
-                const inCat = cat.codeIds.includes(c.id);
-                return (
-                  <button key={c.id} onClick={() => toggleCodeInCategory(cat.id, c.id)}
-                    style={{ fontFamily: "system-ui", fontSize: 11, padding: "3px 8px", borderRadius: 10, cursor: "pointer",
-                      border: `1px solid ${c.color}`, background: inCat ? c.color : "#fff", color: inCat ? "#fff" : c.color, opacity: inCat ? 1 : 0.55 }}>
-                    {c.name}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        ))}
-      </div>
-      {project.categories.length === 0 && <div style={{ fontFamily: "system-ui", fontSize: 13, color: C.sub, marginTop: 20 }}>Nenhuma categoria. Crie uma e clique nos códigos para agregá-los.</div>}
     </div>
   );
 }
