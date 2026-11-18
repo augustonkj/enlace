@@ -1,5 +1,5 @@
 import React, { useState, useRef, useMemo, useEffect, useCallback } from "react";
-import { VW, VH, SNAP_T, setDims, setSizeCtx, SUITE, useMarcarAlterado, useModalTrap, C, NODE_TYPES, TYPE_ORDER, MOMENTS, MOMENT_ORDER, NAT_LBL, ESTAB_LBL, KIND_LBL, brandes, parseCSVfull, csvNorm, colIdx, HELP, TOUR, Hint, Menu, MenuItem, REGION_COLORS, wrapText, sizeOf, degreeMap, clipToRect, distToSeg, qPoint, esc, edgeGeometry, arrowHead, barrierBar, estabBadge, scriptGlyph, calcGlyph, sourceLetter, sourceMark, nodeBody, buildInner, legendMetaFor, snapNode, alignNodes, distributeNodes, depths, forceLayout, arrange, declutter, fillLayout, foldBox, unfoldBox, parseCSV, toGraphML, toGEXF, seedVazio, seedRedeLivre, seedRedeUnica, seedComparativo, seedCadeia, baseState } from "./lib.js";
+import { VW, VH, SNAP_T, setDims, setSizeCtx, SUITE, useMarcarAlterado, useModalTrap, C, NODE_TYPES, TYPE_ORDER, MOMENTS, MOMENT_ORDER, NAT_LBL, ESTAB_LBL, KIND_LBL, brandes, parseCSVfull, csvNorm, colIdx, HELP, TOUR, Hint, Menu, MenuItem, REGION_COLORS, wrapText, sizeOf, degreeMap, clipToRect, distToSeg, qPoint, esc, edgeGeometry, arrowHead, barrierBar, estabBadge, scriptGlyph, calcGlyph, sourceLetter, sourceMark, nodeBody, buildInner, legendMetaFor, MOSTRAR, snapNode, alignNodes, distributeNodes, depths, forceLayout, arrange, declutter, fillLayout, acomodar, comNovoNo, foldBox, unfoldBox, parseCSV, toGraphML, toGEXF, seedVazio, seedRedeLivre, seedRedeUnica, seedComparativo, seedCadeia, baseState } from "./lib.js";
 
 // id único mesmo para cadastros no mesmo milissegundo (Date.now() sozinho colide)
 const uid = (prefix) => prefix + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 7);
@@ -45,7 +45,7 @@ function EditorTAR({ active = true, viewMode: viewModeProp, setViewMode: setView
   const [relatos, setRelatos] = useState([]);
   const [activeRelato, setActiveRelato] = useState(null);
   const [relatoName, setRelatoName] = useState("");
-  const [openSec, setOpenSec] = useState({ ins: true });
+  const [openSec, setOpenSec] = useState({ ins: true, mos: true });
   const [avancado, setAvancado] = useState(false); // não vai para o navegador: nada do Enlace é gravado lá
   const [viewModeInternal, setViewModeInternal] = useState("diagrama");
   const controlledView = viewModeProp != null;
@@ -150,7 +150,8 @@ function EditorTAR({ active = true, viewMode: viewModeProp, setViewMode: setView
   };
   const nodeAt = (p) => {
     for (let i = state.nodes.length - 1; i >= 0; i--) {
-      const n = state.nodes[i], { w, h } = sizeOf(n);
+      const n = state.nodes[i]; if ((state.ocultarTipos || []).includes(n.type)) continue;
+      const { w, h } = sizeOf(n);
       if (Math.abs(p.x - n.x) <= w / 2 && Math.abs(p.y - n.y) <= h / 2) return n;
     }
     return null;
@@ -158,7 +159,9 @@ function EditorTAR({ active = true, viewMode: viewModeProp, setViewMode: setView
   const edgeAt = (p) => {
     const pairMap = {};
     state.edges.forEach((e) => { const k = [e.from, e.to].sort().join("|"); (pairMap[k] ??= []).push(e.id); });
+    const oc = new Set(state.ocultarTipos || []);
     for (const e of state.edges) {
+      if (oc.has(byId(e.from)?.type) || oc.has(byId(e.to)?.type)) continue;
       const geo = edgeGeometry(e, byId, pairMap); if (!geo) continue;
       const { p1, p2, ctrl, curved } = geo;
       let best = Infinity;
@@ -304,13 +307,9 @@ function EditorTAR({ active = true, viewMode: viewModeProp, setViewMode: setView
     setSelNodes([id]); setSelEdge(null); setMode("select");
   };
   const addNodeOfType = (t) => {
-    setDims(state.W, state.H);
     const id = uid("n");
-    const cnt = stateRef.current.nodes.length;
-    const x = Math.min(VW - 90, 120 + (cnt % 5) * 150);
-    const y = Math.min(VH - 130, 110 + Math.floor(cnt / 5) * 110);
     setNewType(t);
-    mut((s) => ({ ...s, nodes: [...s.nodes, { id, label: "Novo actante", x, y, type: t, emph: false, nat: "indef" }] }));
+    mut((s) => comNovoNo({ ...s, ocultarTipos: (s.ocultarTipos || []).filter((x) => x !== t) }, { id, label: "Novo actante", type: t, emph: false, nat: "indef" }));
     setSelNodes([id]); setSelEdge(null); setSelRegion(null); setMode("select");
   };
   const upNode = (id, patch) => setStateRaw((s) => ({ ...s, nodes: s.nodes.map((n) => (n.id === id ? { ...n, ...patch } : n)) }));
@@ -318,11 +317,8 @@ function EditorTAR({ active = true, viewMode: viewModeProp, setViewMode: setView
   const removeNodeById = (id) => mut((s) => ({ ...s, nodes: s.nodes.filter((n) => n.id !== id), edges: s.edges.filter((e) => e.from !== id && e.to !== id) }));
   const removeEdgeById = (id) => mut((s) => ({ ...s, edges: s.edges.filter((e) => e.id !== id) }));
   const addActante = () => {
-    setDims(state.W, state.H);
     const id = uid("n");
-    const cnt = stateRef.current.nodes.length;
-    const x = Math.min(VW - 90, 120 + (cnt % 5) * 150), y = Math.min(VH - 130, 110 + Math.floor(cnt / 5) * 110);
-    mut((s) => ({ ...s, nodes: [...s.nodes, { id, label: "Novo actante", x, y, type: "mediador", emph: false, nat: "indef" }] }));
+    mut((s) => comNovoNo(s, { id, label: "Novo actante", type: "mediador", emph: false, nat: "indef" }));
   };
   const addAssoc = () => {
     const ns = stateRef.current.nodes;
@@ -425,10 +421,9 @@ table.cent{border-collapse:collapse;width:100%;font-size:12px} table.cent th{tex
       let nat = "indef"; if (ni >= 0) { const v = csvNorm(r[ni]); nat = v.startsWith("hum") ? "humano" : (v.includes("nao") || v === "n" || v.includes("não")) ? "nao" : "indef"; }
       let estab; if (ei >= 0) { const v = csvNorm(r[ei]); estab = v.startsWith("estab") ? "estab" : v.includes("prova") ? "prova" : undefined; }
       let calc; if (ci >= 0) { const v = csvNorm(r[ci]); calc = (v === "sim" || v === "true" || v === "x" || v === "1") ? true : undefined; }
-      const x = Math.min(VW - 90, 120 + (idx % 5) * 150), y = Math.min(VH - 130, 110 + Math.floor(idx / 5) * 110);
-      return { id: "n" + Date.now() + "_" + idx, label, x, y, type, emph: false, nat, ...(estab ? { estab } : {}), ...(calc ? { calc } : {}) };
+      return { id: "n" + Date.now() + "_" + idx, label, type, emph: false, nat, ...(estab ? { estab } : {}), ...(calc ? { calc } : {}) };
     });
-    mut((s) => ({ ...s, nodes: newNodes, edges: [] }));
+    mut((s) => newNodes.reduce((acc, n) => comNovoNo(acc, n), { ...s, nodes: [], edges: [] }));
     setSelNodes([]); setSelEdge(null);
     setImpMsg(`${newNodes.length} actante(s) importado(s); associações limpas.`);
   };
@@ -483,9 +478,25 @@ table.cent{border-collapse:collapse;width:100%;font-size:12px} table.cent th{tex
   }, [selEdge, selRegion, selNodes, mut]);
   const doAlign = (how) => setNodes((ns) => alignNodes(ns, selNodes, how));
   const doDistribute = (axis) => setNodes((ns) => distributeNodes(ns, selNodes, axis));
-  const organizar = (kind) => { setDims(state.W, state.H); mut((s) => ({ ...s, nodes: arrange(s.nodes, s.edges, kind) })); setGuides(null); };
-  const desafogar = () => { setDims(state.W, state.H); mut((s) => ({ ...s, nodes: declutter(s.nodes) })); setGuides(null); };
-  const preencher = () => { setDims(state.W, state.H); mut((s) => ({ ...s, nodes: fillLayout(s) })); setGuides(null); };
+  // toda disposição automática termina em acomodar(): nenhuma caixa sobre outra nem
+  // sobre a legenda; se a rede não couber, a figura cresce em vez de empilhar caixas
+  const dispor = (fn) => {
+    setDims(state.W, state.H);
+    mut((s) => {
+      setDims(s.W, s.H);
+      // só o que está à vista é rearrumado; actantes de tipos ocultos ficam onde estão
+      const oc = new Set(s.ocultarTipos || []);
+      const vis = s.nodes.filter((n) => !oc.has(n.type)), ids = new Set(vis.map((n) => n.id));
+      const sv = { ...s, nodes: vis, edges: s.edges.filter((e) => ids.has(e.from) && ids.has(e.to)) };
+      const r = acomodar(s, fn(sv));
+      const novo = Object.fromEntries(r.nodes.map((n) => [n.id, n]));
+      return { ...s, W: r.W, H: r.H, nodes: s.nodes.map((n) => novo[n.id] || n) };
+    });
+    setGuides(null);
+  };
+  const organizar = (kind) => dispor((s) => arrange(s.nodes, s.edges, kind));
+  const desafogar = () => dispor((s) => s.nodes);
+  const preencher = () => dispor((s) => fillLayout(s));
   const limparTudo = () => { let ok = true; try { ok = window.confirm("Apagar todos os actantes e associações? Dá para desfazer com Ctrl+Z."); } catch {} if (!ok) return; mut((s) => ({ ...s, nodes: [], edges: [], regions: [] })); setSelNodes([]); setSelEdge(null); setSelRegion(null); };
   const setCanvas = (w, h) => mut((s) => ({ ...s, W: Math.max(360, Math.min(3200, Math.round(w))), H: Math.max(280, Math.min(2400, Math.round(h))) }));
   const adjustFont = (key, delta) => mut((s) => { const cur = { titulo: 1, no: 1, aresta: 1, legenda: 1, sub: 1, entrelinha: 1.25, ...(s.fonts || {}) }; cur[key] = Math.max(0.6, Math.min(2.2, Math.round((cur[key] + delta) * 100) / 100)); return { ...s, fonts: cur }; });
@@ -602,7 +613,7 @@ table.cent{border-collapse:collapse;width:100%;font-size:12px} table.cent th{tex
   const atualizarRelato = () => { if (!activeRelato) return; setRelatos((rs) => rs.map((x) => (x.id === activeRelato ? { ...x, snap: JSON.stringify(stateRef.current) } : x))); };
   const removerRelato = (id) => { setRelatos((rs) => rs.filter((x) => x.id !== id)); if (activeRelato === id) setActiveRelato(null); };
   const renomearRelato = (id) => { let nv = null; try { nv = window.prompt("Novo nome do relato:"); } catch {} if (nv && nv.trim()) setRelatos((rs) => rs.map((x) => (x.id === id ? { ...x, name: nv.trim().slice(0, 60) } : x))); };
-  const importCSV = (ev) => { const f = ev.target.files?.[0]; if (!f) return; const r = new FileReader(); r.onload = () => { const g = parseCSV(r.result); if (g) { mut(() => baseState(g.nodes, g.edges, false, "Rede importada", "", "", "")); setSelNodes([]); setSelEdge(null); } }; r.readAsText(f); ev.target.value = ""; };
+  const importCSV = (ev) => { const f = ev.target.files?.[0]; if (!f) return; const r = new FileReader(); r.onload = () => { const g = parseCSV(r.result); if (g) { mut(() => { const b = baseState(g.nodes, g.edges, false, "Rede importada", "", "", ""); const r = acomodar(b, b.nodes); return { ...b, W: r.W, H: r.H, nodes: r.nodes }; }); setSelNodes([]); setSelEdge(null); } }; r.readAsText(f); ev.target.value = ""; };
 
   const ui = {
     page: { fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif", background: "#eef1f4", color: "#2b3a48", minHeight: "100vh", display: "flex", flexDirection: "column" },
@@ -936,12 +947,33 @@ table.cent{border-collapse:collapse;width:100%;font-size:12px} table.cent th{tex
             );
           })}</>)}
 
+          {secHead("mos", "Mostrar no diagrama", undefined, "tour-mostrar")}
+          {openSec.mos && (() => {
+            const m = state.mostrar || {};
+            const ocultos = new Set(state.ocultarTipos || []);
+            const marca = (k, v) => mut((s) => ({ ...s, mostrar: { ...(s.mostrar || {}), [k]: v } }));
+            const linha = (key, label, checked, onChange) => (<label key={key} style={{ ...ui.chk, margin: "4px 0" }}><input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} /> {label}</label>);
+            const tiposUsados = TYPE_ORDER.filter((t) => state.nodes.some((n) => n.type === t) || ocultos.has(t));
+            const nOcultos = state.nodes.filter((n) => ocultos.has(n.type)).length;
+            return (<>
+              <div style={{ fontSize: 11, color: "#9aa7b2", marginBottom: 4, lineHeight: 1.35 }}>Desmarque o que não deve aparecer no desenho e nas figuras exportadas. Os dados continuam no projeto e nas tabelas.</div>
+              {linha("titulo", "Título", m.titulo !== false, (v) => marca("titulo", v))}
+              {linha("legenda", "Legenda", !!state.showLegend, (v) => mut((s) => ({ ...s, showLegend: v })))}
+              {linha("nat", "Humano / não-humano (● ■)", state.showNature !== false, (v) => mut((s) => ({ ...s, showNature: v })))}
+              {linha("fontes", "Fontes das associações (E, D, O)", state.showSources !== false, (v) => mut((s) => ({ ...s, showSources: v })))}
+              {linha("rotulos", "Rótulos das associações", m.rotulos !== false, (v) => marca("rotulos", v))}
+              {avancado && MOSTRAR.filter(([, , av]) => av).map(([k, lbl]) => linha(k, lbl, m[k] !== false, (v) => marca(k, v)))}
+              {tiposUsados.length > 0 && (<>
+                <span style={ui.label}>Tipos de actante</span>
+                {tiposUsados.map((t) => linha("t-" + t, NODE_TYPES[t].name, !ocultos.has(t), (v) => mut((s) => { const o = new Set(s.ocultarTipos || []); if (v) o.delete(t); else o.add(t); return { ...s, ocultarTipos: [...o] }; })))}
+                {nOcultos > 0 && <div style={{ fontSize: 11, color: "#b06a1f", marginTop: 4 }}>{nOcultos} actante(s) fora do desenho, com as suas ligações.</div>}
+              </>)}
+            </>);
+          })()}
+
           {secHead("fig", "Figura")}
           {openSec.fig && (<>
           {avancado && <label style={{ ...ui.chk, margin: "4px 0" }}><input type="checkbox" checked={state.twoPanel} onChange={(e) => mut((s) => ({ ...s, twoPanel: e.target.checked }))} /> dois painéis</label>}
-          <label style={{ ...ui.chk, margin: "4px 0" }}><input type="checkbox" checked={state.showLegend} onChange={(e) => mut((s) => ({ ...s, showLegend: e.target.checked }))} /> mostrar legenda</label>
-          <label style={{ ...ui.chk, margin: "4px 0" }}><input type="checkbox" checked={state.showNature !== false} onChange={(e) => mut((s) => ({ ...s, showNature: e.target.checked }))} /> marcadores humano/não-humano</label>
-          <label style={{ ...ui.chk, margin: "4px 0" }}><input type="checkbox" checked={state.showSources !== false} onChange={(e) => mut((s) => ({ ...s, showSources: e.target.checked }))} /> marcas de fonte das associações</label>
           {avancado && (<><span style={ui.label}>Largura máx. do nó ({state.maxW || 170})</span>
           <input type="range" min="90" max="280" value={state.maxW || 170} onChange={(e) => setStateRaw((s) => ({ ...s, maxW: Number(e.target.value) }))} style={{ width: "100%" }} /></>)}
           <span style={ui.label}>{state.twoPanel ? "Título painel (a)" : "Título"}</span>

@@ -392,9 +392,40 @@ function nodeBody(n, stroke, sw, dashAttr) {
   return p.join("");
 }
 
+/* ---------- o que aparece no desenho ----------
+   state.mostrar guarda o que a pessoa escolheu esconder ({chave: false}); e
+   state.ocultarTipos, os tipos de actante fora do desenho. Só o desenho (tela,
+   legenda, SVG/PNG, relatório) passa por aqui: os dados continuam no projeto. */
+const MOSTRAR = [
+  ["titulo", "Título"], ["rotulos", "Rótulos das associações"],
+  ["momentos", "Momentos da tradução", true], ["frentes", "Programa / antiprograma", true],
+  ["relacoes", "Porta-voz, delegação e referência", true], ["estab", "Prova de força", true],
+  ["calc", "Centro de cálculo", true], ["regioes", "Regiões (locus)", true],
+];
+function vistaDe(state) {
+  const m = state.mostrar || {}, off = (k) => m[k] === false;
+  const ocultos = new Set(state.ocultarTipos || []);
+  let nodes = state.nodes || [], edges = state.edges || [];
+  if (ocultos.size) {
+    nodes = nodes.filter((n) => !ocultos.has(n.type));
+    const ids = new Set(nodes.map((n) => n.id));
+    edges = edges.filter((e) => ids.has(e.from) && ids.has(e.to));
+  }
+  if (off("estab") || off("calc")) nodes = nodes.map((n) => ({ ...n, ...(off("estab") ? { estab: undefined } : {}), ...(off("calc") ? { calc: undefined } : {}) }));
+  if (off("rotulos") || off("momentos") || off("frentes") || off("relacoes")) edges = edges.map((e) => ({
+    ...e,
+    ...(off("rotulos") ? { label: "" } : {}),
+    ...(off("momentos") ? { moment: undefined } : {}),
+    ...(off("frentes") ? { front: undefined } : {}),
+    ...(off("relacoes") ? { kind: undefined, ganha: undefined, perde: undefined } : {}),
+  }));
+  return { ...state, nodes, edges, titles: off("titulo") ? { a: "", b: "" } : (state.titles || { a: "", b: "" }), regions: off("regioes") ? [] : (state.regions || []) };
+}
+
 /* ---------- desenho ---------- */
 function buildInner(state, opts = {}) {
   setDims(state.W, state.H);
+  state = vistaDe(state);
   const { titles, subs, legend, twoPanel, showLegend, regions = [], showNature = true } = state;
   const showSources = state.showSources !== false;
   const { selNodes, selEdge, selRegion, connectFrom, interactive, grid, guides, band, force } = opts;
@@ -639,6 +670,7 @@ function buildInner(state, opts = {}) {
 /* ---------- métrica da legenda (altura real para uma largura) ---------- */
 function legendMetaFor(state, W) {
   if (!state.showLegend) return { rows: 0, legendH: 0 };
+  state = vistaDe(state);
   const nodes = state.nodes, edges = state.edges, legend = state.legend || {};
   const used = new Set(nodes.map((n) => n.type));
   const entries = [];
@@ -807,9 +839,16 @@ function arrange(nodes, edges, kind) {
 }
 
 /* ---------- desafogar: separa só o que está sobreposto, com mínimo deslocamento ---------- */
-function declutter(nodes, iters = 120, pad = 12) {
+// `area` ({left,right,top,bottom}) prende as caixas a cada passo; sem ela vale a tela
+// inteira (comportamento antigo). Prender só no fim desfazia a separação.
+function declutter(nodes, iters = 120, pad = 12, area) {
   const pts = nodes.map((n) => ({ ...n }));
   const sz = pts.map(sizeOf);
+  const box = area || { left: 8, right: VW - 8, top: 30, bottom: VH - 8 };
+  const prende = (p, s) => {
+    p.x = Math.max(box.left + s.w / 2, Math.min(box.right - s.w / 2, p.x));
+    p.y = Math.max(box.top + s.h / 2, Math.min(box.bottom - s.h / 2, p.y));
+  };
   for (let it = 0; it < iters; it++) {
     let moved = false;
     for (let i = 0; i < pts.length; i++) for (let j = i + 1; j < pts.length; j++) {
@@ -819,18 +858,97 @@ function declutter(nodes, iters = 120, pad = 12) {
       const oy = (sa.h / 2 + sb.h / 2 + pad) - Math.abs(dy);
       if (ox > 0 && oy > 0) {
         moved = true;
-        if (ox <= oy) { const push = (ox / 2) * (dx < 0 ? -1 : 1); a.x -= push; b.x += push; }
-        else { const push = (oy / 2) * (dy < 0 ? -1 : 1); a.y -= push; b.y += push; }
+        // empurra pelo eixo de menor sobreposição; se a borda segurar uma das
+        // caixas, a outra leva o resto do empurrão, e se nem assim separar, tenta o outro eixo
+        const empurra = (eixo, o, d) => {
+          const sg = d < 0 ? -1 : 1, ax = a[eixo], bx = b[eixo];
+          a[eixo] -= sg * o / 2; b[eixo] += sg * o / 2; prende(a, sa); prende(b, sb);
+          const falta = o - Math.abs((b[eixo] - a[eixo]) - (bx - ax));
+          if (falta > 0.5) { a[eixo] -= sg * falta; b[eixo] += sg * falta; prende(a, sa); prende(b, sb); }
+        };
+        if (ox <= oy) empurra("x", ox, dx); else empurra("y", oy, dy);
+        const ox2 = (sa.w / 2 + sb.w / 2 + pad) - Math.abs(b.x - a.x), oy2 = (sa.h / 2 + sb.h / 2 + pad) - Math.abs(b.y - a.y);
+        if (ox2 > 0 && oy2 > 0) { if (ox <= oy) empurra("y", oy2, b.y - a.y || (j % 2 ? 1 : -1)); else empurra("x", ox2, b.x - a.x || (j % 2 ? 1 : -1)); }
       }
     }
     if (!moved) break;
   }
-  pts.forEach((p, i) => {
-    const s = sz[i];
-    p.x = Math.round(Math.max(s.w / 2 + 8, Math.min(VW - s.w / 2 - 8, p.x)));
-    p.y = Math.round(Math.max(s.h / 2 + 30, Math.min(VH - s.h / 2 - 8, p.y)));
-  });
+  pts.forEach((p, i) => { prende(p, sz[i]); p.x = Math.round(p.x); p.y = Math.round(p.y); });
   return pts;
+}
+
+/* ---------- área útil: abaixo do título, acima das legendas inferiores e da legenda ---------- */
+function areaUtil(state, W = state.W || 900, H = state.H || 540) {
+  const legH = state.showLegend ? legendMetaFor(state, W).legendH : 0;
+  const subGap = (state.subs && (state.subs.a || (state.twoPanel && state.subs.b))) ? 22 : 0;
+  const t = vistaDe(state).titles, temTitulo = state.twoPanel || t.a;
+  return { left: 16, right: W - 16, top: temTitulo ? 44 : 16, bottom: H - (legH ? legH + 10 : 0) - subGap - 12 };
+}
+
+/* ---------- pares de caixas que se sobrepõem ---------- */
+function sobrepostos(nodes, folga = 0.5) {
+  const sz = nodes.map(sizeOf);
+  let n = 0;
+  for (let i = 0; i < nodes.length; i++) for (let j = i + 1; j < nodes.length; j++) {
+    if ((sz[i].w + sz[j].w) / 2 - Math.abs(nodes[i].x - nodes[j].x) > folga && (sz[i].h + sz[j].h) / 2 - Math.abs(nodes[i].y - nodes[j].y) > folga) n++;
+  }
+  return n;
+}
+
+/* ---------- acomodar: nenhuma caixa sobre outra nem sobre a legenda ----------
+   Tenta caber na figura atual; se não couber, a figura cresce (mantendo a
+   proporção) até caber, em vez de empilhar caixas. Devolve { W, H, nodes }. */
+function acomodar(state, nodes, pad = 14) {
+  const W0 = state.W || 900, H0 = state.H || 540;
+  if (!nodes.length) return { W: W0, H: H0, nodes };
+  setDims(W0, H0);
+  const a0 = areaUtil(state, W0, H0);
+  // se alguma caixa está fora da área útil (sob a legenda, fora da tela), encolhe
+  // as posições (não as caixas) para dentro dela antes de separar
+  {
+    const sz = nodes.map(sizeOf), mw = Math.max(...sz.map((q) => q.w)) / 2, mh = Math.max(...sz.map((q) => q.h)) / 2;
+    const fora = nodes.some((n, i) => n.x - sz[i].w / 2 < a0.left || n.x + sz[i].w / 2 > a0.right || n.y - sz[i].h / 2 < a0.top || n.y + sz[i].h / 2 > a0.bottom);
+    if (fora) {
+      const xs = nodes.map((n) => n.x), ys = nodes.map((n) => n.y);
+      const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+      const L = a0.left + mw, R = a0.right - mw, T = a0.top + mh, B = a0.bottom - mh;
+      const mapa = (v, v0, v1, A, Z) => (v1 - v0 < 1 ? (A + Z) / 2 : A + ((v - v0) / (v1 - v0)) * Math.max(0, Z - A));
+      nodes = nodes.map((n) => ({ ...n, x: mapa(n.x, x0, x1, L, R), y: mapa(n.y, y0, y1, T, B) }));
+    }
+  }
+  let ult = null;
+  for (let f = 1; f < 4.01; f *= 1.12) {
+    const W = Math.min(3200, Math.round(W0 * f)), H = Math.min(2400, Math.round(H0 * f));
+    setDims(W, H);
+    const a = areaUtil(state, W, H);
+    const sx = (a.right - a.left) / Math.max(1, a0.right - a0.left), sy = (a.bottom - a.top) / Math.max(1, a0.bottom - a0.top);
+    const base = nodes.map((n) => ({ ...n, x: a.left + (n.x - a0.left) * sx, y: a.top + (n.y - a0.top) * sy }));
+    const ns = declutter(base, 400, pad, a);
+    ult = { W, H, nodes: ns };
+    if (!sobrepostos(ns) || (W === 3200 && H === 2400)) break;
+  }
+  setDims(ult.W, ult.H);
+  return ult;
+}
+
+/* ---------- lugar livre para uma caixa nova (ordem de leitura), ou null ---------- */
+function lugarLivre(state, node, pad = 28) {
+  setDims(state.W, state.H);
+  const a = areaUtil(state), s = sizeOf(node);
+  const livre = (x, y) => state.nodes.every((m) => { const t = sizeOf(m); return Math.abs(m.x - x) >= (t.w + s.w) / 2 + pad || Math.abs(m.y - y) >= (t.h + s.h) / 2 + pad; });
+  for (let y = a.top + s.h / 2 + 8; y <= a.bottom - s.h / 2; y += 12)
+    for (let x = a.left + s.w / 2 + 8; x <= a.right - s.w / 2; x += 12)
+      if (livre(x, y)) return { x: Math.round(x), y: Math.round(y) };
+  return null;
+}
+
+/* ---------- pôr uma caixa nova sem sobrepor; se não houver lugar, a figura cresce ---------- */
+function comNovoNo(state, node) {
+  const p = lugarLivre(state, node);
+  if (p) return { ...state, nodes: [...state.nodes, { ...node, ...p }] };
+  const a = areaUtil(state);
+  const r = acomodar(state, [...state.nodes, { ...node, x: (a.left + a.right) / 2, y: a.bottom }]);
+  return { ...state, W: r.W, H: r.H, nodes: r.nodes };
 }
 
 /* ---------- preencher: desafoga, centraliza e escala para ocupar a área útil ---------- */
@@ -1221,4 +1339,4 @@ function BarrasH({ dados, largRotulo = 150, corPadrao = "#1f7a8c", alturaBarra =
 
 function setSizeCtx(v) { SIZE_CTX = v; }
 
-export { marcarAlterado, marcarSalvo, haAlteracoes, useMarcarAlterado, useHistorico, useAtalhosDesfazer, emCampoDeTexto, BarrasH, escalaBonita, numBR, VW, VH, SNAP_T, setDims, setSizeCtx, SUITE, useModalTrap, C, NODE_TYPES, TYPE_ORDER, MOMENTS, MOMENT_ORDER, NAT_LBL, ESTAB_LBL, KIND_LBL, brandes, parseCSVfull, csvNorm, colIdx, HELP, TOUR, Hint, Menu, MenuItem, REGION_COLORS, wrapText, sizeOf, degreeMap, clipToRect, distToSeg, qPoint, esc, edgeGeometry, arrowHead, barrierBar, estabBadge, scriptGlyph, calcGlyph, sourceLetter, sourceMark, nodeBody, buildInner, legendMetaFor, snapNode, alignNodes, distributeNodes, depths, forceLayout, arrange, declutter, fillLayout, foldBox, unfoldBox, parseCSV, toGraphML, toGEXF, seedVazio, seedRedeLivre, seedRedeUnica, seedComparativo, seedCadeia, baseState };
+export { marcarAlterado, marcarSalvo, haAlteracoes, useMarcarAlterado, useHistorico, useAtalhosDesfazer, emCampoDeTexto, BarrasH, escalaBonita, numBR, VW, VH, SNAP_T, setDims, setSizeCtx, SUITE, useModalTrap, C, NODE_TYPES, TYPE_ORDER, MOMENTS, MOMENT_ORDER, NAT_LBL, ESTAB_LBL, KIND_LBL, brandes, parseCSVfull, csvNorm, colIdx, HELP, TOUR, Hint, Menu, MenuItem, REGION_COLORS, wrapText, sizeOf, degreeMap, clipToRect, distToSeg, qPoint, esc, edgeGeometry, arrowHead, barrierBar, estabBadge, scriptGlyph, calcGlyph, sourceLetter, sourceMark, nodeBody, buildInner, legendMetaFor, MOSTRAR, vistaDe, snapNode, alignNodes, distributeNodes, depths, forceLayout, arrange, declutter, fillLayout, areaUtil, sobrepostos, acomodar, lugarLivre, comNovoNo, foldBox, unfoldBox, parseCSV, toGraphML, toGEXF, seedVazio, seedRedeLivre, seedRedeUnica, seedComparativo, seedCadeia, baseState };

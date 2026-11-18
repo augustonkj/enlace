@@ -38,6 +38,17 @@ Saída: `Enlace.html` (~1,6 MB). É só abrir no navegador.
   **Avançado** (`avancado`, só na sessão) revela os demais
   conceitos e as opções de figura. Só esconde: os dados continuam no projeto e
   no desenho, e o modo só liga quando se clica no botão.
+
+  **Sem sobreposição**: toda disposição automática (Organizar, Desafogar,
+  Preencher, importar CSV) termina em `acomodar()` (lib.js), que mantém as
+  caixas dentro de `areaUtil()` (abaixo do título, acima da legenda) e, se a
+  rede não couber, faz a figura crescer em vez de empilhar caixas. Actante novo
+  entra no primeiro espaço livre (`lugarLivre()`/`comNovoNo()`).
+
+  **Mostrar no diagrama**: `state.mostrar` (`{chave: false}`) e
+  `state.ocultarTipos` dizem o que fica fora do desenho. `vistaDe()` aplica isso
+  dentro de `buildInner()` e `legendMetaFor()`, então tela, legenda, SVG/PNG e
+  relatório saem iguais; tabelas, métricas e GraphML/GEXF usam os dados inteiros.
 - `AnaliseQualitativa.jsx` — análise textual (análise livre: codificar,
   categorizar e interpretar). Persiste em `window.storage` (localStorage). As
   abas ficam em `ABAS`, na ordem em que aparecem: **Documentos** (`corpus`),
