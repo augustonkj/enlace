@@ -1,5 +1,5 @@
 import React, { useState, useRef, useMemo, useEffect, useCallback } from "react";
-import { VW, VH, SNAP_T, setDims, setSizeCtx, SUITE, useMarcarAlterado, useModalTrap, C, NODE_TYPES, TYPE_ORDER, MOMENTS, MOMENT_ORDER, NAT_LBL, ESTAB_LBL, KIND_LBL, brandes, parseCSVfull, csvNorm, colIdx, HELP, TOUR, Hint, Menu, MenuItem, REGION_COLORS, wrapText, sizeOf, degreeMap, clipToRect, distToSeg, qPoint, esc, edgeGeometry, arrowHead, barrierBar, estabBadge, scriptGlyph, calcGlyph, sourceLetter, sourceMark, nodeBody, buildInner, legendMetaFor, MOSTRAR, snapNode, alignNodes, distributeNodes, depths, forceLayout, arrange, declutter, fillLayout, acomodar, comNovoNo, foldBox, unfoldBox, parseCSV, toGraphML, toGEXF, seedVazio, seedRedeLivre, seedRedeUnica, seedComparativo, seedCadeia, baseState } from "./lib.js";
+import { VW, VH, SNAP_T, setDims, setSizeCtx, SUITE, useMarcarAlterado, useModalTrap, C, NODE_TYPES, TYPE_ORDER, MOMENTS, MOMENT_ORDER, NAT_LBL, ESTAB_LBL, KIND_LBL, brandes, parseCSVfull, csvNorm, colIdx, HELP, TOUR, Hint, Menu, MenuItem, REGION_COLORS, wrapText, sizeOf, degreeMap, clipToRect, distToSeg, qPoint, esc, edgeGeometry, arrowHead, barrierBar, estabBadge, scriptGlyph, calcGlyph, sourceLetter, sourceMark, nodeBody, buildInner, legendMetaFor, MOSTRAR, vistaDe, entradasLegenda, snapNode, alignNodes, distributeNodes, depths, forceLayout, arrange, declutter, fillLayout, acomodar, comNovoNo, foldBox, unfoldBox, parseCSV, toGraphML, toGEXF, seedVazio, seedRedeLivre, seedRedeUnica, seedComparativo, seedCadeia, baseState } from "./lib.js";
 
 // id único mesmo para cadastros no mesmo milissegundo (Date.now() sozinho colide)
 const uid = (prefix) => prefix + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 7);
@@ -134,7 +134,9 @@ function EditorTAR({ active = true, viewMode: viewModeProp, setViewMode: setView
     () => buildInner(state, { selNodes, selEdge, selRegion, connectFrom, interactive: true, grid: { show: showGrid, size: gridSize }, guides, band, force, step: effStep }),
     [state, selNodes, selEdge, selRegion, connectFrom, showGrid, gridSize, guides, band, force, effStep]
   );
-  useEffect(() => { if (svgRef.current) svgRef.current.innerHTML = inner; }, [inner]);
+  // a tela do desenho é desmontada na vista Tabela: ao voltar, redesenha (senão fica vazia ou velha)
+  const verDiag = viewMode !== "analise", verTab = viewMode !== "diagrama";
+  useEffect(() => { if (svgRef.current) svgRef.current.innerHTML = inner; }, [inner, verDiag]);
   useEffect(() => { setDims(state.W, state.H); setSizeCtx({ force, degree: degreeMap(state.nodes, state.edges), maxW: state.maxW || 170, fontNo: (state.fonts && state.fonts.no) || 1, lineSpace: (state.fonts && state.fonts.entrelinha != null) ? state.fonts.entrelinha : 1.25 }); }, [state, force]);
   useEffect(() => { setDims(state.W, state.H); if (!resizeRef.current) setView({ x: 0, y: 0, w: state.W || 900, h: state.H || 540 }); }, [state.W, state.H]);
 
@@ -670,7 +672,7 @@ table.cent{border-collapse:collapse;width:100%;font-size:12px} table.cent th{tex
   return (
     <div style={ui.page}>
       <div style={ui.bar}>
-        <strong style={{ fontSize: 15, marginRight: 4 }}>{viewMode === "analise" ? "Teoria Ator-Rede" : "Diagrama TAR"}</strong>
+        <strong style={{ fontSize: 15, marginRight: 4 }}>{viewMode === "analise" ? "Teoria Ator-Rede" : viewMode === "ambos" ? "Diagrama TAR + Tabela" : "Diagrama TAR"}</strong>
         {!controlledView && (
           <div id="tour-tabs" style={{ display: "flex", border: "1px solid #cfd6dd", borderRadius: 6, overflow: "hidden", marginRight: 6 }}>
             {[["analise", "Análise"], ["diagrama", "Diagrama"]].map(([v, l]) => (
@@ -684,7 +686,7 @@ table.cent{border-collapse:collapse;width:100%;font-size:12px} table.cent th{tex
         <button style={{ ...ui.mini, background: avancado ? "#e3f1f4" : "#fff", borderColor: avancado ? C.sel : "#cfd6dd", color: avancado ? C.sel : "#34495e" }} onClick={() => setAvancado((v) => !v)} aria-pressed={avancado} title="mostra os demais conceitos (prova de força, centro de cálculo, momentos da tradução, programa/antiprograma, porta-voz, delegação, cadeia de referência) e as opções de figura">{avancado ? "✓ Avançado" : "Avançado"}</button>
         <span style={ui.div} />
 
-        {viewMode === "diagrama" && (
+        {verDiag && (
           <Menu label="Organizar" title="acomodar os nós automaticamente" btnStyle={ui.mini}>
             {(close) => (<>
               <MenuItem onClick={() => { organizar("rede"); close(); }}>Rede ○ (círculo)</MenuItem>
@@ -697,7 +699,7 @@ table.cent{border-collapse:collapse;width:100%;font-size:12px} table.cent th{tex
           </Menu>
         )}
 
-        {viewMode === "diagrama" && avancado && (
+        {verDiag && avancado && (
           <Menu label="Exibição" title="grade, aderência, guias e força" btnStyle={ui.mini} width={210}>
             <label style={{ ...ui.chk, padding: "5px 6px" }}><input type="checkbox" checked={showGrid} onChange={(e) => setShowGrid(e.target.checked)} /> Grade</label>
             <label style={{ ...ui.chk, padding: "5px 6px" }}><input type="checkbox" checked={snap} onChange={(e) => setSnap(e.target.checked)} /> Aderir à grade</label>
@@ -709,7 +711,7 @@ table.cent{border-collapse:collapse;width:100%;font-size:12px} table.cent th{tex
           </Menu>
         )}
 
-        {viewMode === "diagrama" && (<>
+        {verDiag && (<>
           <span style={{ fontSize: 12, color: "#5a6b7a", fontWeight: 600, alignSelf: "center" }}>Zoom</span>
           <button style={ui.mini} onClick={() => setView((v) => ({ ...v, w: v.w * 0.9, h: v.h * 0.9 }))} aria-label="aproximar (zoom +)" title="aproximar (zoom +)">＋</button>
           <button style={ui.mini} onClick={() => setView((v) => ({ ...v, w: v.w * 1.1, h: v.h * 1.1 }))} aria-label="afastar (zoom −)" title="afastar (zoom −)">－</button>
@@ -717,7 +719,7 @@ table.cent{border-collapse:collapse;width:100%;font-size:12px} table.cent th{tex
           <span style={ui.div} />
         </>)}
 
-        {viewMode === "diagrama" && (
+        {verDiag && (
           <Menu label="Exportar" title="exportar a figura e o grafo" btnStyle={ui.mini}>
             {(close) => (<>
               <MenuItem onClick={() => { gerarRelatorio(); close(); }}>Relatório (PDF)</MenuItem>
@@ -742,7 +744,7 @@ table.cent{border-collapse:collapse;width:100%;font-size:12px} table.cent th{tex
 
         <input ref={fileRef} type="file" accept="application/json" onChange={importJSON} style={{ display: "none" }} />
         <input ref={csvRef} type="file" accept=".csv,text/csv,text/plain" onChange={importCSV} style={{ display: "none" }} />
-        {viewMode === "diagrama" && maxStep > 0 && (
+        {verDiag && maxStep > 0 && (
           <>
             <span style={ui.div} />
             <span style={{ fontSize: 12, color: "#7a8b99" }}>Etapa</span>
@@ -752,7 +754,7 @@ table.cent{border-collapse:collapse;width:100%;font-size:12px} table.cent th{tex
         )}
       </div>
 
-      {viewMode === "diagrama" && (<div style={ui.main}>
+      {verDiag && (<div style={ui.main}>
         <div style={ui.canvasWrap}>
           <svg ref={svgRef} viewBox={`${view.x} ${view.y} ${view.w} ${view.h}`}
             style={{ width: "100%", height: "auto", display: "block", touchAction: "none", cursor: mode === "connect" ? "crosshair" : "default", background: "#fbfcfd", borderRadius: 4 }}
@@ -951,23 +953,50 @@ table.cent{border-collapse:collapse;width:100%;font-size:12px} table.cent th{tex
           {openSec.mos && (() => {
             const m = state.mostrar || {};
             const ocultos = new Set(state.ocultarTipos || []);
+            const legOcl = new Set(state.legendaOculta || []);
             const marca = (k, v) => mut((s) => ({ ...s, mostrar: { ...(s.mostrar || {}), [k]: v } }));
-            const linha = (key, label, checked, onChange) => (<label key={key} style={{ ...ui.chk, margin: "4px 0" }}><input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} /> {label}</label>);
-            const tiposUsados = TYPE_ORDER.filter((t) => state.nodes.some((n) => n.type === t) || ocultos.has(t));
-            const nOcultos = state.nodes.filter((n) => ocultos.has(n.type)).length;
+            const linha = (key, label, checked, onChange, extra) => (<label key={key} style={{ ...ui.chk, margin: "4px 0", ...extra }}><input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} /> <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={label}>{label}</span></label>);
+            const N = state.nodes, E = state.edges;
+            // só aparece a opção do que existe nesta rede
+            const elementos = [
+              ["titulo", "Título", !!(state.titles && (state.titles.a || state.titles.b))],
+              ["subs", "Legenda inferior (texto)", !!(state.subs && (state.subs.a || state.subs.b))],
+              ["rotulos", "Rótulos das associações", E.some((e) => e.label)],
+              ["setas", "Setas", E.some((e) => e.directed)],
+              ["momentos", "Momentos da tradução (cores)", E.some((e) => e.moment)],
+              ["frentes", "Programa / antiprograma", E.some((e) => e.front)],
+              ["relacoes", "Porta-voz, delegação e referência", E.some((e) => e.kind)],
+              ["estab", "Prova de força (selos)", N.some((n) => n.estab)],
+              ["calc", "Centro de cálculo (anel)", N.some((n) => n.calc)],
+              ["regioes", "Regiões (locus)", (state.regions || []).length > 0],
+            ].filter(([, , tem]) => tem);
+            const tiposUsados = TYPE_ORDER.filter((t) => N.some((n) => n.type === t));
+            const nOcultos = N.filter((n) => ocultos.has(n.type)).length;
+            const itensLeg = entradasLegenda(vistaDe(state));
+            const tudo = (v) => mut((s) => ({
+              ...s, showLegend: v, showNature: v, showSources: v,
+              mostrar: v ? {} : Object.fromEntries(MOSTRAR.map(([k]) => [k, false]).concat([["subs", false], ["setas", false]])),
+              ocultarTipos: [], legendaOculta: [],
+            }));
+            const sub = { fontSize: 11, fontWeight: 700, color: "#5a6b7a", textTransform: "uppercase", letterSpacing: 0.3, margin: "10px 0 2px" };
             return (<>
-              <div style={{ fontSize: 11, color: "#9aa7b2", marginBottom: 4, lineHeight: 1.35 }}>Desmarque o que não deve aparecer no desenho e nas figuras exportadas. Os dados continuam no projeto e nas tabelas.</div>
-              {linha("titulo", "Título", m.titulo !== false, (v) => marca("titulo", v))}
-              {linha("legenda", "Legenda", !!state.showLegend, (v) => mut((s) => ({ ...s, showLegend: v })))}
+              <div style={{ display: "flex", gap: 6, marginBottom: 4 }}>
+                <button style={{ ...ui.mini, flex: 1 }} onClick={() => tudo(true)} title="volta a mostrar tudo">Mostrar tudo</button>
+                <button style={{ ...ui.mini, flex: 1 }} onClick={() => tudo(false)} title="deixa só as caixas e as linhas">Esconder tudo</button>
+              </div>
+              <div style={{ fontSize: 11, color: "#9aa7b2", marginBottom: 2, lineHeight: 1.35 }}>Só sai do desenho e das figuras exportadas; os dados continuam no projeto.</div>
+              <div style={sub}>No desenho</div>
               {linha("nat", "Humano / não-humano (● ■)", state.showNature !== false, (v) => mut((s) => ({ ...s, showNature: v })))}
               {linha("fontes", "Fontes das associações (E, D, O)", state.showSources !== false, (v) => mut((s) => ({ ...s, showSources: v })))}
-              {linha("rotulos", "Rótulos das associações", m.rotulos !== false, (v) => marca("rotulos", v))}
-              {avancado && MOSTRAR.filter(([, , av]) => av).map(([k, lbl]) => linha(k, lbl, m[k] !== false, (v) => marca(k, v)))}
+              {elementos.map(([k, lbl]) => linha(k, lbl, m[k] !== false, (v) => marca(k, v)))}
               {tiposUsados.length > 0 && (<>
-                <span style={ui.label}>Tipos de actante</span>
+                <div style={sub}>Tipos de actante</div>
                 {tiposUsados.map((t) => linha("t-" + t, NODE_TYPES[t].name, !ocultos.has(t), (v) => mut((s) => { const o = new Set(s.ocultarTipos || []); if (v) o.delete(t); else o.add(t); return { ...s, ocultarTipos: [...o] }; })))}
                 {nOcultos > 0 && <div style={{ fontSize: 11, color: "#b06a1f", marginTop: 4 }}>{nOcultos} actante(s) fora do desenho, com as suas ligações.</div>}
               </>)}
+              <div style={sub}>Legenda</div>
+              {linha("legenda", "Mostrar legenda", !!state.showLegend, (v) => mut((s) => ({ ...s, showLegend: v })))}
+              {state.showLegend && itensLeg.map((it) => linha("l-" + it.key, it.label, !legOcl.has(it.key), (v) => mut((s) => { const o = new Set(s.legendaOculta || []); if (v) o.delete(it.key); else o.add(it.key); return { ...s, legendaOculta: [...o] }; }), { paddingLeft: 16 }))}
             </>);
           })()}
 
@@ -1024,7 +1053,7 @@ table.cent{border-collapse:collapse;width:100%;font-size:12px} table.cent th{tex
         </div>
       </div>)}
 
-      {viewMode === "analise" && (
+      {verTab && (
         <div id="tour-analise" style={{ background: "#fff", border: "1px solid #dde3e9", borderRadius: 8, padding: 16, maxHeight: "84vh", overflowY: "auto" }}>
           <div style={{ fontSize: 13, color: "#5a6b7a", marginBottom: 14, lineHeight: 1.45 }}>
             Cadastre os actantes (tipo e natureza) e as associações entre eles, com a fonte de cada uma. O resumo é calculado sozinho e alimenta o diagrama: Tabela e Diagrama são a mesma rede.{!avancado && " Os demais conceitos da TAR ficam no botão Avançado."}

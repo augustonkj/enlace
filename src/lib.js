@@ -412,14 +412,39 @@ function vistaDe(state) {
     edges = edges.filter((e) => ids.has(e.from) && ids.has(e.to));
   }
   if (off("estab") || off("calc")) nodes = nodes.map((n) => ({ ...n, ...(off("estab") ? { estab: undefined } : {}), ...(off("calc") ? { calc: undefined } : {}) }));
-  if (off("rotulos") || off("momentos") || off("frentes") || off("relacoes")) edges = edges.map((e) => ({
+  if (off("rotulos") || off("setas") || off("momentos") || off("frentes") || off("relacoes")) edges = edges.map((e) => ({
     ...e,
     ...(off("rotulos") ? { label: "" } : {}),
+    ...(off("setas") ? { directed: false } : {}),
     ...(off("momentos") ? { moment: undefined } : {}),
     ...(off("frentes") ? { front: undefined } : {}),
     ...(off("relacoes") ? { kind: undefined, ganha: undefined, perde: undefined } : {}),
   }));
-  return { ...state, nodes, edges, titles: off("titulo") ? { a: "", b: "" } : (state.titles || { a: "", b: "" }), regions: off("regioes") ? [] : (state.regions || []) };
+  return { ...state, nodes, edges, titles: off("titulo") ? { a: "", b: "" } : (state.titles || { a: "", b: "" }), subs: off("subs") ? { a: "", b: "" } : (state.subs || { a: "", b: "" }), regions: off("regioes") ? [] : (state.regions || []) };
+}
+
+/* ---------- itens da legenda (o que está no desenho), cada um com uma chave ---------- */
+function entradasLegenda(state) {
+  const nodes = state.nodes || [], edges = state.edges || [], legend = state.legend || {};
+  const showSources = state.showSources !== false, showNature = state.showNature !== false;
+  const used = new Set(nodes.map((n) => n.type));
+  const entries = [];
+  TYPE_ORDER.forEach((t) => { if (used.has(t)) entries.push({ g: "node", t, label: legend[t] }); });
+  if (edges.some((e) => (e.style || "solida") === "solida" && !e.moment && e.kind !== "porta-voz")) entries.push({ g: "edge", t: "solida", label: legend.solida });
+  if (edges.some((e) => e.style === "tracejada" && !e.moment && e.kind !== "porta-voz")) entries.push({ g: "edge", t: "tracejada", label: legend.tracejada });
+  MOMENT_ORDER.forEach((m) => { if (edges.some((e) => e.moment === m)) entries.push({ g: "moment", t: m, label: MOMENTS[m].name }); });
+  if (edges.some((e) => e.kind === "porta-voz")) entries.push({ g: "pv", t: "pv", label: legend.portavoz });
+  if (edges.some((e) => e.kind === "delegacao")) entries.push({ g: "deleg", t: "deleg", label: legend.delegacao || "delegação / inscrição" });
+  if (edges.some((e) => e.kind === "referencia")) entries.push({ g: "ref", t: "ref", label: legend.referencia || "cadeia de referência" });
+  if (edges.some((e) => e.front === "programa")) entries.push({ g: "front", t: "programa", label: legend.programa || "associação do programa de ação" });
+  if (edges.some((e) => e.front === "antiprograma")) entries.push({ g: "front", t: "antiprograma", label: legend.antiprograma || "associação do antiprograma (resistência)" });
+  if (nodes.some((n) => n.estab === "estab")) entries.push({ g: "estab", t: "estab", label: legend.estabilizado || "actante estabilizado" });
+  if (nodes.some((n) => n.estab === "prova")) entries.push({ g: "estab", t: "prova", label: legend.prova || "actante em prova de força" });
+  if (nodes.some((n) => n.calc)) entries.push({ g: "calc", t: "calc", label: legend.calc || "centro de cálculo" });
+  if (showSources && edges.some((e) => e.fonteTipo || e.fonte)) entries.push({ g: "fonte", t: "fonte", label: legend.fonte || "nota de fonte: E entrevista, D documento, O observação" });
+  if (showNature && nodes.some((n) => n.nat === "humano")) entries.push({ g: "mark", t: "humano", label: legend.humano });
+  if (showNature && nodes.some((n) => n.nat === "nao")) entries.push({ g: "mark", t: "nao", label: legend.nao });
+  return entries.map((e) => ({ ...e, key: e.g + ":" + e.t, label: e.label || e.t }));
 }
 
 /* ---------- desenho ---------- */
@@ -464,23 +489,7 @@ function buildInner(state, opts = {}) {
     if (r.label) out.push(`<text x="${(minX - pad + 8).toFixed(1)}" y="${(minY - pad + 16).toFixed(1)}" font-family="Helvetica,Arial,sans-serif" font-size="11" font-weight="bold" fill="${col}">${esc(r.label)}</text>`);
   }
 
-  const used = new Set(nodes.map((n) => n.type));
-  const entries = [];
-  TYPE_ORDER.forEach((t) => { if (used.has(t)) entries.push({ g: "node", t, label: legend[t] }); });
-  if (edges.some((e) => (e.style || "solida") === "solida" && !e.moment && e.kind !== "porta-voz")) entries.push({ g: "edge", t: "solida", label: legend.solida });
-  if (edges.some((e) => e.style === "tracejada" && !e.moment && e.kind !== "porta-voz")) entries.push({ g: "edge", t: "tracejada", label: legend.tracejada });
-  MOMENT_ORDER.forEach((m) => { if (edges.some((e) => e.moment === m)) entries.push({ g: "moment", t: m, label: MOMENTS[m].name }); });
-  if (edges.some((e) => e.kind === "porta-voz")) entries.push({ g: "pv", t: "pv", label: legend.portavoz });
-  if (edges.some((e) => e.kind === "delegacao")) entries.push({ g: "deleg", t: "deleg", label: legend.delegacao || "delegação / inscrição" });
-  if (edges.some((e) => e.kind === "referencia")) entries.push({ g: "ref", t: "ref", label: legend.referencia || "cadeia de referência" });
-  if (edges.some((e) => e.front === "programa")) entries.push({ g: "front", t: "programa", label: legend.programa || "associação do programa de ação" });
-  if (edges.some((e) => e.front === "antiprograma")) entries.push({ g: "front", t: "antiprograma", label: legend.antiprograma || "associação do antiprograma (resistência)" });
-  if (nodes.some((n) => n.estab === "estab")) entries.push({ g: "estab", t: "estab", label: legend.estabilizado || "actante estabilizado" });
-  if (nodes.some((n) => n.estab === "prova")) entries.push({ g: "estab", t: "prova", label: legend.prova || "actante em prova de força" });
-  if (nodes.some((n) => n.calc)) entries.push({ g: "calc", t: "calc", label: legend.calc || "centro de cálculo" });
-  if (showSources && edges.some((e) => e.fonteTipo || e.fonte)) entries.push({ g: "fonte", t: "fonte", label: legend.fonte || "nota de fonte: E entrevista, D documento, O observação" });
-  if (showNature && nodes.some((n) => n.nat === "humano")) entries.push({ g: "mark", t: "humano", label: legend.humano });
-  if (showNature && nodes.some((n) => n.nat === "nao")) entries.push({ g: "mark", t: "nao", label: legend.nao });
+  const entries = entradasLegenda(state).filter((e) => !(state.legendaOculta || []).includes(e.key));
 
   // legenda em colunas alinhadas (compacta, justificada por colunas)
   const usable = VW - 48, gapL = 24, maxCols = 5;
@@ -671,24 +680,7 @@ function buildInner(state, opts = {}) {
 function legendMetaFor(state, W) {
   if (!state.showLegend) return { rows: 0, legendH: 0 };
   state = vistaDe(state);
-  const nodes = state.nodes, edges = state.edges, legend = state.legend || {};
-  const used = new Set(nodes.map((n) => n.type));
-  const entries = [];
-  TYPE_ORDER.forEach((t) => { if (used.has(t)) entries.push(legend[t] || t); });
-  if (edges.some((e) => (e.style || "solida") === "solida" && !e.moment && e.kind !== "porta-voz")) entries.push(legend.solida || "associação");
-  if (edges.some((e) => e.style === "tracejada" && !e.moment && e.kind !== "porta-voz")) entries.push(legend.tracejada || "reposta");
-  MOMENT_ORDER.forEach((m) => { if (edges.some((e) => e.moment === m)) entries.push(MOMENTS[m].name); });
-  if (edges.some((e) => e.kind === "porta-voz")) entries.push(legend.portavoz || "porta-voz");
-  if (edges.some((e) => e.kind === "delegacao")) entries.push(legend.delegacao || "delegação / inscrição");
-  if (edges.some((e) => e.kind === "referencia")) entries.push(legend.referencia || "cadeia de referência");
-  if (edges.some((e) => e.front === "programa")) entries.push(legend.programa || "programa");
-  if (edges.some((e) => e.front === "antiprograma")) entries.push(legend.antiprograma || "antiprograma");
-  if (nodes.some((n) => n.estab === "estab")) entries.push(legend.estabilizado || "estabilizado");
-  if (nodes.some((n) => n.estab === "prova")) entries.push(legend.prova || "em prova");
-  if (nodes.some((n) => n.calc)) entries.push(legend.calc || "centro de cálculo");
-  if ((state.showSources !== false) && edges.some((e) => e.fonteTipo || e.fonte)) entries.push(legend.fonte || "nota de fonte: E entrevista, D documento, O observação");
-  if (state.showNature !== false && nodes.some((n) => n.nat === "humano")) entries.push(legend.humano || "humano");
-  if (state.showNature !== false && nodes.some((n) => n.nat === "nao")) entries.push(legend.nao || "não-humano");
+  const entries = entradasLegenda(state).filter((e) => !(state.legendaOculta || []).includes(e.key)).map((e) => e.label);
   if (!entries.length) return { rows: 0, legendH: 0 };
   const fL = (state.fonts && state.fonts.legenda) || 1;
   const usable = W - 48, gapL = 24, maxCols = 5;
@@ -1339,4 +1331,4 @@ function BarrasH({ dados, largRotulo = 150, corPadrao = "#1f7a8c", alturaBarra =
 
 function setSizeCtx(v) { SIZE_CTX = v; }
 
-export { marcarAlterado, marcarSalvo, haAlteracoes, useMarcarAlterado, useHistorico, useAtalhosDesfazer, emCampoDeTexto, BarrasH, escalaBonita, numBR, VW, VH, SNAP_T, setDims, setSizeCtx, SUITE, useModalTrap, C, NODE_TYPES, TYPE_ORDER, MOMENTS, MOMENT_ORDER, NAT_LBL, ESTAB_LBL, KIND_LBL, brandes, parseCSVfull, csvNorm, colIdx, HELP, TOUR, Hint, Menu, MenuItem, REGION_COLORS, wrapText, sizeOf, degreeMap, clipToRect, distToSeg, qPoint, esc, edgeGeometry, arrowHead, barrierBar, estabBadge, scriptGlyph, calcGlyph, sourceLetter, sourceMark, nodeBody, buildInner, legendMetaFor, MOSTRAR, vistaDe, snapNode, alignNodes, distributeNodes, depths, forceLayout, arrange, declutter, fillLayout, areaUtil, sobrepostos, acomodar, lugarLivre, comNovoNo, foldBox, unfoldBox, parseCSV, toGraphML, toGEXF, seedVazio, seedRedeLivre, seedRedeUnica, seedComparativo, seedCadeia, baseState };
+export { marcarAlterado, marcarSalvo, haAlteracoes, useMarcarAlterado, useHistorico, useAtalhosDesfazer, emCampoDeTexto, BarrasH, escalaBonita, numBR, VW, VH, SNAP_T, setDims, setSizeCtx, SUITE, useModalTrap, C, NODE_TYPES, TYPE_ORDER, MOMENTS, MOMENT_ORDER, NAT_LBL, ESTAB_LBL, KIND_LBL, brandes, parseCSVfull, csvNorm, colIdx, HELP, TOUR, Hint, Menu, MenuItem, REGION_COLORS, wrapText, sizeOf, degreeMap, clipToRect, distToSeg, qPoint, esc, edgeGeometry, arrowHead, barrierBar, estabBadge, scriptGlyph, calcGlyph, sourceLetter, sourceMark, nodeBody, buildInner, legendMetaFor, MOSTRAR, vistaDe, entradasLegenda, snapNode, alignNodes, distributeNodes, depths, forceLayout, arrange, declutter, fillLayout, areaUtil, sobrepostos, acomodar, lugarLivre, comNovoNo, foldBox, unfoldBox, parseCSV, toGraphML, toGEXF, seedVazio, seedRedeLivre, seedRedeUnica, seedComparativo, seedCadeia, baseState };

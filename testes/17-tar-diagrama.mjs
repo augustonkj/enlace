@@ -58,8 +58,15 @@ for (const [nome, re] of [["orgânica", /^Orgânica/], ["círculo", /^Rede ○/]
 
 // mostrar no diagrama
 ok(/>Legenda</.test(svg()), "a legenda aparece por padrão");
-await toggle(chk(/^Legenda$/));
-ok(!/>Legenda</.test(svg()), "desmarcar Legenda tira a legenda do desenho");
+// cada item da legenda liga e desliga sozinho
+const itemMed = chk(/^mediador \(produz diferença\)$/);
+ok(!!itemMed && /mediador \(produz diferença\)/.test(svg()), "o item 'mediador' está na legenda e no painel");
+await toggle(itemMed);
+ok(!/mediador \(produz diferença\)/.test(svg()) && /intermediário \(transmite/.test(svg()), "desmarcar um item tira só ele da legenda");
+await toggle(chk(/^mediador \(produz diferença\)$/));
+ok(/mediador \(produz diferença\)/.test(svg()), "marcar de novo devolve o item");
+await toggle(chk(/^Mostrar legenda$/));
+ok(!/>Legenda</.test(svg()), "desmarcar Mostrar legenda tira a legenda do desenho");
 const antes = (svg().match(/Novo actante/g) || []).length;
 await toggle(chk(/^Intermediário$/));
 const depois = (svg().match(/Novo actante/g) || []).length;
@@ -69,3 +76,38 @@ o = await salvo();
 ok(o.nodes.length === 16 && o.ocultarTipos.includes("intermediario") && o.showLegend === false, "os dados continuam no projeto e a escolha é salva");
 await toggle(chk(/^Intermediário$/));
 ok((svg().match(/Novo actante/g) || []).length === 16, "marcar de novo traz os actantes de volta");
+
+// esconder tudo / mostrar tudo
+await click(pb(/^Esconder tudo$/), 400);
+o = await salvo();
+ok(o.showLegend === false && o.showNature === false && o.showSources === false && o.mostrar.titulo === false && !/>Legenda</.test(svg()), "Esconder tudo deixa só caixas e linhas");
+ok((svg().match(/Novo actante/g) || []).length === 16, "Esconder tudo não some com os actantes");
+await click(pb(/^Mostrar tudo$/), 400);
+o = await salvo();
+ok(o.showLegend === true && !Object.keys(o.mostrar).length && !o.legendaOculta.length && /\>Legenda</.test(svg()), "Mostrar tudo devolve tudo");
+
+// Tabela e Diagrama são a mesma rede: editar numa aparece na outra na hora
+await click(nav("Tabela"), 500);
+const celula = [...vis().querySelectorAll("td input")].find((i) => i.value === "Novo actante");
+const setter = Object.getOwnPropertyDescriptor(W.HTMLInputElement.prototype, "value").set;
+celula.dispatchEvent(new W.FocusEvent("focus", { bubbles: true }));
+setter.call(celula, "Escola renomeada");
+celula.dispatchEvent(new W.Event("input", { bubbles: true }));
+await wait(300);
+await click(pb(/^\+ Actante$/), 300);
+await click(nav("Diagrama"), 600);
+ok(/Escola renomeada/.test(svg()), "renomear na Tabela aparece no Diagrama ao voltar");
+ok((svg().match(/Novo actante/g) || []).length === 16, "actante criado na Tabela aparece no Diagrama");
+await click(pb(/^\+ Mediador/), 300);
+await click(nav("Tabela"), 500);
+ok([...vis().querySelectorAll("td input")].filter((i) => i.value === "Novo actante").length === 17, "actante criado no Diagrama aparece na Tabela");
+
+// "Os dois": diagrama e tabela na mesma tela; editar a tabela redesenha na hora
+await click(nav("Os dois"), 600);
+ok(!!vis().querySelector("svg") && vis().querySelectorAll("td input").length > 0, "Os dois mostra diagrama e tabela juntos");
+const cel2 = [...vis().querySelectorAll("td input")].find((i) => i.value === "Novo actante");
+cel2.dispatchEvent(new W.FocusEvent("focus", { bubbles: true }));
+setter.call(cel2, "Ao vivo");
+cel2.dispatchEvent(new W.Event("input", { bubbles: true }));
+await wait(400);
+ok(/Ao vivo/.test(svg()), "em Os dois, editar a tabela atualiza o diagrama sem trocar de vista");

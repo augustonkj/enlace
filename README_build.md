@@ -33,7 +33,10 @@ Saída: `Enlace.html` (~1,6 MB). É só abrir no navegador.
   (`buildInner`), layouts, `brandes`, `parseCSV`, seeds, `Hint`, `SUITE` (ponte
   entre as ferramentas). Exporta tudo num barrel no fim do arquivo.
 - `EditorTAR.jsx` — editor Ator-Rede. Uma única instância serve as duas vistas da
-  sub-aba **Ator-Rede** via a prop `viewMode`: `analise` (Tabela) e `diagrama`.
+  sub-aba **Ator-Rede** via a prop `viewMode`: `analise` (Tabela), `diagrama` e
+  `ambos` ("Os dois": desenho e tabelas na mesma tela, atualizando juntos).
+  A `<svg>` é desmontada na Tabela; o efeito que a preenche depende também de
+  `verDiag`, senão ela volta vazia ou velha.
   Por padrão mostra só o essencial (tipo, natureza/simetria e fonte); o botão
   **Avançado** (`avancado`, só na sessão) revela os demais
   conceitos e as opções de figura. Só esconde: os dados continuam no projeto e
@@ -46,7 +49,8 @@ Saída: `Enlace.html` (~1,6 MB). É só abrir no navegador.
   entra no primeiro espaço livre (`lugarLivre()`/`comNovoNo()`).
 
   **Mostrar no diagrama**: `state.mostrar` (`{chave: false}`) e
-  `state.ocultarTipos` dizem o que fica fora do desenho. `vistaDe()` aplica isso
+  `state.ocultarTipos` dizem o que fica fora do desenho, e `state.legendaOculta`
+  (chaves de `entradasLegenda()`) os itens da legenda. `vistaDe()` aplica isso
   dentro de `buildInner()` e `legendMetaFor()`, então tela, legenda, SVG/PNG e
   relatório saem iguais; tabelas, métricas e GraphML/GEXF usam os dados inteiros.
 - `AnaliseQualitativa.jsx` — análise textual (análise livre: codificar,
@@ -108,7 +112,8 @@ As janelas:
 Análise Qualitativa ─┬─ Texto            (codificação, corpus e consultas)
                      ├─ Revisão          (referências + fluxo PRISMA)
                      └─ Ator-Rede ──┬─ Tabela     mesma rede
-                                    └─ Diagrama   (estado do EditorTAR)
+                                    ├─ Diagrama   (estado do EditorTAR)
+                                    └─ Os dois
 Mapa conceitual        (diagrama livre, independente)
 Análise Quantitativa   (testes estatísticos, independente)
 ```
