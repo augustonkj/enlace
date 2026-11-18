@@ -34,6 +34,10 @@ Saída: `Enlace.html` (~1,6 MB). É só abrir no navegador.
   entre as ferramentas). Exporta tudo num barrel no fim do arquivo.
 - `EditorTAR.jsx` — editor Ator-Rede. Uma única instância serve as duas vistas da
   sub-aba **Ator-Rede** via a prop `viewMode`: `analise` (Tabela) e `diagrama`.
+  Por padrão mostra só o essencial (tipo, natureza/simetria e fonte); o botão
+  **Avançado** (`avancado`, só na sessão) revela os demais
+  conceitos e as opções de figura. Só esconde: os dados continuam no projeto e
+  no desenho, e o modo só liga quando se clica no botão.
 - `AnaliseQualitativa.jsx` — análise textual (análise livre: codificar,
   categorizar e interpretar). Persiste em `window.storage` (localStorage). As
   abas ficam em `ABAS`, na ordem em que aparecem: **Documentos** (`corpus`),

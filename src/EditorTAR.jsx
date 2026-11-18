@@ -4,6 +4,9 @@ import { VW, VH, SNAP_T, setDims, setSizeCtx, SUITE, useMarcarAlterado, useModal
 // id único mesmo para cadastros no mesmo milissegundo (Date.now() sozinho colide)
 const uid = (prefix) => prefix + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 7);
 
+// O essencial (tipo, natureza/simetria, fonte) fica sempre à vista; o resto dos
+// conceitos e as opções de figura só aparecem quando se clica em "Avançado".
+
 function EditorTAR({ active = true, viewMode: viewModeProp, setViewMode: setViewModeProp }) {
   const [state, setStateRaw] = useState(seedVazio);
   const [past, setPast] = useState([]);
@@ -43,6 +46,7 @@ function EditorTAR({ active = true, viewMode: viewModeProp, setViewMode: setView
   const [activeRelato, setActiveRelato] = useState(null);
   const [relatoName, setRelatoName] = useState("");
   const [openSec, setOpenSec] = useState({ ins: true });
+  const [avancado, setAvancado] = useState(false); // não vai para o navegador: nada do Enlace é gravado lá
   const [viewModeInternal, setViewModeInternal] = useState("diagrama");
   const controlledView = viewModeProp != null;
   const viewMode = controlledView ? viewModeProp : viewModeInternal;
@@ -666,6 +670,7 @@ table.cent{border-collapse:collapse;width:100%;font-size:12px} table.cent th{tex
         <button style={ui.mini} onClick={() => setShowHelp(true)} title="ajuda: o que o software faz">? Ajuda</button>
         <button style={ui.mini} onClick={undo} disabled={!past.length} title="desfazer (Ctrl+Z)">↶</button>
         <button style={ui.mini} onClick={redo} disabled={!future.length} title="refazer (Ctrl+Shift+Z)">↷</button>
+        <button style={{ ...ui.mini, background: avancado ? "#e3f1f4" : "#fff", borderColor: avancado ? C.sel : "#cfd6dd", color: avancado ? C.sel : "#34495e" }} onClick={() => setAvancado((v) => !v)} aria-pressed={avancado} title="mostra os demais conceitos (prova de força, centro de cálculo, momentos da tradução, programa/antiprograma, porta-voz, delegação, cadeia de referência) e as opções de figura">{avancado ? "✓ Avançado" : "Avançado"}</button>
         <span style={ui.div} />
 
         {viewMode === "diagrama" && (
@@ -681,7 +686,7 @@ table.cent{border-collapse:collapse;width:100%;font-size:12px} table.cent th{tex
           </Menu>
         )}
 
-        {viewMode === "diagrama" && (
+        {viewMode === "diagrama" && avancado && (
           <Menu label="Exibição" title="grade, aderência, guias e força" btnStyle={ui.mini} width={210}>
             <label style={{ ...ui.chk, padding: "5px 6px" }}><input type="checkbox" checked={showGrid} onChange={(e) => setShowGrid(e.target.checked)} /> Grade</label>
             <label style={{ ...ui.chk, padding: "5px 6px" }}><input type="checkbox" checked={snap} onChange={(e) => setSnap(e.target.checked)} /> Aderir à grade</label>
@@ -760,14 +765,8 @@ table.cent{border-collapse:collapse;width:100%;font-size:12px} table.cent th{tex
               <Seg value={newStyle} set={setNewStyle} options={[["solida", "Sólida"], ["tracejada", "Tracejada"]]} />
               <label style={ui.chk}><input type="checkbox" checked={newDirected} onChange={(e) => setNewDirected(e.target.checked)} /> com seta</label>
             </div>
-            <span style={ui.label}>Rede automática{hint("Organiza os nós sozinho: em rede (force-directed), círculo, camadas, ou preenche a tela.")}</span>
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              <button style={{ ...ui.mini, flex: "1 1 100%" }} onClick={() => organizar("organica")} title="organiza os nós conectados como uma rede (force-directed)">⚛ Organizar em rede</button>
-              <button style={{ ...ui.mini, flex: 1 }} onClick={() => organizar("rede")} title="dispõe os nós em círculo">○ Círculo</button>
-              <button style={{ ...ui.mini, flex: 1 }} onClick={() => organizar("vertical")} title="cascata por camadas">↓ Camadas</button>
-              <button style={{ ...ui.mini, flex: 1 }} onClick={preencher} title="centraliza e amplia para preencher a tela">⤢ Preencher</button>
-            </div>
-            <div style={{ fontSize: 11, color: "#9aa7b2", marginTop: 6, lineHeight: 1.35 }}>Dica: clique num tipo para inserir a caixa (ela já fica selecionada para renomear). Use “Ligar nós” e clique origem e destino. “Organizar em rede” acomoda tudo automaticamente.</div>
+            <button style={{ ...ui.mini, width: "100%", marginTop: 10 }} onClick={() => organizar("organica")} title="acomoda os nós como uma rede (outras disposições no menu Organizar)">⚛ Organizar em rede</button>
+            <div style={{ fontSize: 11, color: "#9aa7b2", marginTop: 6, lineHeight: 1.35 }}>Clique num tipo para criar o actante, renomeie no painel e use “Ligar nós”. Outras disposições ficam no menu Organizar.</div>
           </>)}
 
           {selNodes.length > 1 && (
@@ -812,6 +811,7 @@ table.cent{border-collapse:collapse;width:100%;font-size:12px} table.cent th{tex
                   <button style={{ ...ui.mini, flex: 1, background: selNode.type === "intermediario" ? "#e3f1f4" : "#fff", borderColor: selNode.type === "intermediario" ? C.sel : "#cfd6dd" }} onClick={() => updateNode({ type: "intermediario" })}>Não → intermediário</button>
                 </div>
               </div>
+              {avancado && (<>
               <span style={ui.label}>Prova de força{hint("Estabilizado: resistiu às provas e virou fato. Em prova: ainda em disputa.")}</span>
               <select style={ui.input} value={selNode.estab || ""} onChange={(e) => updateNode({ estab: e.target.value || undefined })}>
                 <option value="">não marcado</option>
@@ -822,6 +822,8 @@ table.cent{border-collapse:collapse;width:100%;font-size:12px} table.cent th{tex
               <span style={ui.label}>Revelar na etapa (vazio = sempre)</span>
               <input style={ui.input} type="number" min="1" value={selNode.step || ""} onChange={(e) => updateNode({ step: e.target.value ? Number(e.target.value) : undefined })} />
               <label style={{ ...ui.chk, margin: "8px 0" }}><input type="checkbox" checked={!!selNode.emph} onChange={(e) => updateNode({ emph: e.target.checked })} /> ênfase (negrito)</label>
+              </>)}
+              <div style={{ height: 8 }} />
               {selNode.type === "caixapreta" && selNode.folded && (<button style={{ ...ui.mini, width: "100%", marginBottom: 8 }} onClick={unfold}>▣ Desdobrar caixa-preta</button>)}
               <button style={{ ...ui.btn(), width: "100%" }} onClick={deleteSelected}>Remover nó</button>
             </>
@@ -831,6 +833,19 @@ table.cent{border-collapse:collapse;width:100%;font-size:12px} table.cent th{tex
               <div style={ui.h}>Aresta selecionada</div>
               <span style={ui.label}>Estilo</span>
               <Seg value={selEdgeObj.style} set={(v) => updateEdge({ style: v })} options={[["solida", "Sólida"], ["tracejada", "Tracejada"]]} />
+              <label style={{ ...ui.chk, margin: "8px 0" }}><input type="checkbox" checked={!!selEdgeObj.directed} onChange={(e) => updateEdge({ directed: e.target.checked })} /> seta (direcionada)</label>
+              <span style={ui.label}>Rótulo</span>
+              <input style={ui.input} value={selEdgeObj.label || ""} onChange={(e) => updateEdgeRaw({ label: e.target.value })} onFocus={pushHist} />
+              <span style={ui.label}>Nota de fonte (rastro empírico){hint("De onde veio esta ligação: entrevista (E), documento (D), observação (O) ou outro. Aproxima o diagrama do “siga os atores”.")}</span>
+              <select style={ui.input} value={selEdgeObj.fonteTipo || ""} onChange={(e) => updateEdge({ fonteTipo: e.target.value || undefined })}>
+                <option value="">sem fonte</option>
+                <option value="entrevista">entrevista (E)</option>
+                <option value="documento">documento (D)</option>
+                <option value="observacao">observação (O)</option>
+                <option value="outro">outro (·)</option>
+              </select>
+              <input style={ui.input} value={selEdgeObj.fonte || ""} onChange={(e) => updateEdgeRaw({ fonte: e.target.value })} onFocus={pushHist} placeholder="ex.: entrevista com gestor, 2024" />
+              {avancado && (<>
               <span style={ui.label}>Relação{hint("Tipo de ligação: associação simples, porta-voz (representa outros), delegação (ação inscrita num objeto) ou cadeia de referência (do mundo ao texto).")}</span>
               <select style={ui.input} value={selEdgeObj.kind || ""} onChange={(e) => updateEdge({ kind: e.target.value || undefined })}>
                 <option value="">associação</option>
@@ -857,22 +872,11 @@ table.cent{border-collapse:collapse;width:100%;font-size:12px} table.cent th{tex
                 <option value="programa">programa (a favor)</option>
                 <option value="antiprograma">antiprograma (resistência)</option>
               </select>
-              <label style={{ ...ui.chk, margin: "8px 0" }}><input type="checkbox" checked={!!selEdgeObj.directed} onChange={(e) => updateEdge({ directed: e.target.checked })} /> seta (direcionada)</label>
               <span style={ui.label}>Curvatura ({Math.round(selEdgeObj.curve || 0)})</span>
               <input type="range" min="-60" max="60" value={selEdgeObj.curve || 0} onPointerDown={pushHist} onChange={(e) => updateEdgeRaw({ curve: Number(e.target.value) || undefined })} style={{ width: "100%" }} />
-              <span style={ui.label}>Rótulo</span>
-              <input style={ui.input} value={selEdgeObj.label || ""} onChange={(e) => updateEdgeRaw({ label: e.target.value })} onFocus={pushHist} />
-              <span style={ui.label}>Nota de fonte (rastro empírico){hint("De onde veio esta ligação: entrevista (E), documento (D), observação (O) ou outro. Aproxima o diagrama do \u201csiga os atores\u201d.")}</span>
-              <select style={ui.input} value={selEdgeObj.fonteTipo || ""} onChange={(e) => updateEdge({ fonteTipo: e.target.value || undefined })}>
-                <option value="">sem fonte</option>
-                <option value="entrevista">entrevista (E)</option>
-                <option value="documento">documento (D)</option>
-                <option value="observacao">observação (O)</option>
-                <option value="outro">outro (·)</option>
-              </select>
-              <input style={ui.input} value={selEdgeObj.fonte || ""} onChange={(e) => updateEdgeRaw({ fonte: e.target.value })} onFocus={pushHist} placeholder="ex.: entrevista com gestor, 2024" />
               <span style={ui.label}>Revelar na etapa (vazio = sempre)</span>
               <input style={ui.input} type="number" min="1" value={selEdgeObj.step || ""} onChange={(e) => updateEdge({ step: e.target.value ? Number(e.target.value) : undefined })} />
+              </>)}
               <button style={{ ...ui.btn(), marginTop: 10, width: "100%" }} onClick={deleteSelected}>Remover aresta</button>
             </>
           )}
@@ -900,8 +904,8 @@ table.cent{border-collapse:collapse;width:100%;font-size:12px} table.cent th{tex
             );
           })()}
 
-          {secHead("tam", "Tamanho da figura")}
-          {openSec.tam && (<>
+          {avancado && secHead("tam", "Tamanho da figura")}
+          {avancado && openSec.tam && (<>
           <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
             <input style={{ ...ui.input, width: 70 }} type="number" min="360" max="3200" value={state.W || 900} onChange={(e) => setCanvas(Number(e.target.value), state.H || 540)} onFocus={pushHist} />
             <span style={{ color: "#9aa7b2" }}>×</span>
@@ -918,8 +922,8 @@ table.cent{border-collapse:collapse;width:100%;font-size:12px} table.cent th{tex
           <label style={{ ...ui.chk, margin: "8px 0 0" }}><input type="checkbox" checked={scaleOnResize} onChange={(e) => setScaleOnResize(e.target.checked)} /> escalar conteúdo ao arrastar a alça</label>
           <div style={{ fontSize: 11, color: "#9aa7b2", marginTop: 4 }}>arraste a alça ◢ no canto inferior direito da tela para redimensionar</div></>)}
 
-          {secHead("fon", "Fontes e espaçamento")}
-          {openSec.fon && (<>{[["titulo", "Títulos"], ["no", "Caixas (nós)"], ["aresta", "Rótulos de aresta"], ["legenda", "Legenda"], ["sub", "Subtítulos"], ["entrelinha", "Entrelinha das caixas"]].map(([k, lbl]) => {
+          {avancado && secHead("fon", "Fontes e espaçamento")}
+          {avancado && openSec.fon && (<>{[["titulo", "Títulos"], ["no", "Caixas (nós)"], ["aresta", "Rótulos de aresta"], ["legenda", "Legenda"], ["sub", "Subtítulos"], ["entrelinha", "Entrelinha das caixas"]].map(([k, lbl]) => {
             const def = k === "entrelinha" ? 1.25 : 1;
             const val = (state.fonts && state.fonts[k] != null) ? state.fonts[k] : def;
             return (
@@ -934,12 +938,12 @@ table.cent{border-collapse:collapse;width:100%;font-size:12px} table.cent th{tex
 
           {secHead("fig", "Figura")}
           {openSec.fig && (<>
-          <label style={{ ...ui.chk, margin: "4px 0" }}><input type="checkbox" checked={state.twoPanel} onChange={(e) => mut((s) => ({ ...s, twoPanel: e.target.checked }))} /> dois painéis</label>
+          {avancado && <label style={{ ...ui.chk, margin: "4px 0" }}><input type="checkbox" checked={state.twoPanel} onChange={(e) => mut((s) => ({ ...s, twoPanel: e.target.checked }))} /> dois painéis</label>}
           <label style={{ ...ui.chk, margin: "4px 0" }}><input type="checkbox" checked={state.showLegend} onChange={(e) => mut((s) => ({ ...s, showLegend: e.target.checked }))} /> mostrar legenda</label>
           <label style={{ ...ui.chk, margin: "4px 0" }}><input type="checkbox" checked={state.showNature !== false} onChange={(e) => mut((s) => ({ ...s, showNature: e.target.checked }))} /> marcadores humano/não-humano</label>
           <label style={{ ...ui.chk, margin: "4px 0" }}><input type="checkbox" checked={state.showSources !== false} onChange={(e) => mut((s) => ({ ...s, showSources: e.target.checked }))} /> marcas de fonte das associações</label>
-          <span style={ui.label}>Largura máx. do nó ({state.maxW || 170})</span>
-          <input type="range" min="90" max="280" value={state.maxW || 170} onChange={(e) => setStateRaw((s) => ({ ...s, maxW: Number(e.target.value) }))} style={{ width: "100%" }} />
+          {avancado && (<><span style={ui.label}>Largura máx. do nó ({state.maxW || 170})</span>
+          <input type="range" min="90" max="280" value={state.maxW || 170} onChange={(e) => setStateRaw((s) => ({ ...s, maxW: Number(e.target.value) }))} style={{ width: "100%" }} /></>)}
           <span style={ui.label}>{state.twoPanel ? "Título painel (a)" : "Título"}</span>
           <input style={ui.input} value={state.titles.a} onChange={(e) => setStateRaw((s) => ({ ...s, titles: { ...s.titles, a: e.target.value } }))} onFocus={pushHist} />
           {state.twoPanel && (<><span style={ui.label}>Título painel (b)</span><input style={ui.input} value={state.titles.b} onChange={(e) => setStateRaw((s) => ({ ...s, titles: { ...s.titles, b: e.target.value } }))} /></>)}
@@ -947,8 +951,8 @@ table.cent{border-collapse:collapse;width:100%;font-size:12px} table.cent th{tex
           <input style={ui.input} value={state.subs.a} onChange={(e) => setStateRaw((s) => ({ ...s, subs: { ...s.subs, a: e.target.value } }))} />
           {state.twoPanel && (<><span style={ui.label}>Legenda inferior (b)</span><input style={ui.input} value={state.subs.b} onChange={(e) => setStateRaw((s) => ({ ...s, subs: { ...s.subs, b: e.target.value } }))} /></>)}</>)}
 
-          {secHead("rel", "Relatos da mesma rede")}
-          {openSec.rel && (<>
+          {avancado && secHead("rel", "Relatos da mesma rede")}
+          {avancado && openSec.rel && (<>
           <div style={{ fontSize: 11, color: "#9aa7b2", marginBottom: 6, lineHeight: 1.35 }}>Salve versões alternativas do mesmo conjunto de actantes.{hint("O \u201cmolusco de referência\u201d: a mesma rede pode ser contada de vários modos e nenhum relato é privilegiado. Salve, alterne e atualize versões.")} Nenhum relato é privilegiado: cada um é um quadro da rede.</div>
           <div style={{ display: "flex", gap: 6 }}>
             <input style={{ ...ui.input, flex: 1 }} placeholder="nome do relato" value={relatoName} onChange={(e) => setRelatoName(e.target.value)} />
@@ -968,8 +972,8 @@ table.cent{border-collapse:collapse;width:100%;font-size:12px} table.cent th{tex
             {!relatos.length && <div style={{ fontSize: 11, color: "#b3bcc4" }}>nenhum relato salvo ainda</div>}
           </div></>)}
 
-          {secHead("mod", "Modelos")}
-          {openSec.mod && (<>
+          {avancado && secHead("mod", "Modelos")}
+          {avancado && openSec.mod && (<>
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
             <button style={ui.mini} onClick={() => { mut(() => seedRedeLivre()); setSelNodes([]); setSelEdge(null); }}>Rede livre</button>
             <button style={ui.mini} onClick={() => { mut(() => seedRedeUnica()); setSelNodes([]); setSelEdge(null); }}>Rede única</button>
@@ -977,7 +981,7 @@ table.cent{border-collapse:collapse;width:100%;font-size:12px} table.cent th{tex
             <button style={ui.mini} onClick={() => { mut(() => seedCadeia()); setSelNodes([]); setSelEdge(null); }}>Cadeia</button>
           </div></>)}
 
-          {state.showLegend && (
+          {avancado && state.showLegend && (
             <>
               {secHead("leg", "Textos da legenda")}
               {openSec.leg && (<>{[["mediador", "Mediador"], ["intermediario", "Intermediário"], ["silenciado", "Silenciado"], ["opp", "OPP"], ["caixapreta", "Caixa-preta"], ["quaseobjeto", "Quase-objeto"], ["solida", "Linha sólida"], ["tracejada", "Linha tracejada"], ["portavoz", "Porta-voz"], ["delegacao", "Delegação"], ["referencia", "Cadeia de referência"], ["programa", "Programa"], ["antiprograma", "Antiprograma"], ["estabilizado", "Estabilizado"], ["prova", "Em prova"], ["calc", "Centro de cálculo"], ["fonte", "Nota de fonte"], ["humano", "Humano"], ["nao", "Não-humano"]].map(([k, lbl]) => (
@@ -991,7 +995,7 @@ table.cent{border-collapse:collapse;width:100%;font-size:12px} table.cent th{tex
       {viewMode === "analise" && (
         <div id="tour-analise" style={{ background: "#fff", border: "1px solid #dde3e9", borderRadius: 8, padding: 16, maxHeight: "84vh", overflowY: "auto" }}>
           <div style={{ fontSize: 13, color: "#5a6b7a", marginBottom: 14, lineHeight: 1.45 }}>
-            Cadastre os actantes e categorize cada um (tipo, natureza, estabilização, centro de cálculo); registre as associações. O resumo quantitativo é calculado automaticamente e alimenta o diagrama (as duas abas compartilham os mesmos dados).
+            Cadastre os actantes (tipo e natureza) e as associações entre eles, com a fonte de cada uma. O resumo é calculado sozinho e alimenta o diagrama: Tabela e Diagrama são a mesma rede.{!avancado && " Os demais conceitos da TAR ficam no botão Avançado."}
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(185px,1fr))", gap: 10, marginBottom: 20 }}>
@@ -1000,15 +1004,15 @@ table.cent{border-collapse:collapse;width:100%;font-size:12px} table.cent th{tex
               <div style={aKv}><span>Actantes</span><strong>{analise.N}</strong></div>
               <div style={aKv}><span>Associações</span><strong>{analise.E}</strong></div>
               <div style={aKv}><span>Densidade</span><strong>{(analise.density * 100).toFixed(1)}%</strong></div>
-              <div style={aKv}><span>Centros de cálculo</span><strong>{analise.calc}</strong></div>
+              {avancado && <div style={aKv}><span>Centros de cálculo</span><strong>{analise.calc}</strong></div>}
               <div style={{ ...aKv, color: simetria.level === "ok" ? "#2e7d4f" : simetria.level === "aviso" ? "#b06a1f" : "#7a8b99" }}><span>Simetria</span><strong>{simetria.level === "ok" ? "ok" : simetria.level === "aviso" ? "atenção" : "—"}</strong></div>
             </div>
-            <div style={aCard}>
+            {avancado && (<div style={aCard}>
               <div style={aCardH}>Estrutura da rede</div>
               <div style={aKv}><span>Componentes conectados</span><strong>{analise.components}</strong></div>
               <div style={aKv}><span>Actantes isolados</span><strong>{analise.isolated}</strong></div>
               <div style={aKv}><span>Densidade</span><strong>{(analise.density * 100).toFixed(1)}%</strong></div>
-            </div>
+            </div>)}
             <div style={aCard}>
               <div style={aCardH}>Por tipo</div>
               {TYPE_ORDER.map((t) => (<div key={t} style={aKv}><span>{NODE_TYPES[t].name}</span><strong>{analise.byType[t] || 0}</strong></div>))}
@@ -1019,24 +1023,24 @@ table.cent{border-collapse:collapse;width:100%;font-size:12px} table.cent th{tex
               <div style={aKv}><span>Não-humano</span><strong>{analise.byNat.nao}</strong></div>
               <div style={aKv}><span>Indefinido</span><strong>{analise.byNat.indef}</strong></div>
             </div>
-            <div style={aCard}>
+            {avancado && (<div style={aCard}>
               <div style={aCardH}>Estabilização</div>
               <div style={aKv}><span>Estabilizado</span><strong>{analise.byEstab.estab}</strong></div>
               <div style={aKv}><span>Em prova</span><strong>{analise.byEstab.prova}</strong></div>
               <div style={aKv}><span>Sem estado</span><strong>{analise.byEstab.nenhum}</strong></div>
-            </div>
-            <div style={aCard}>
+            </div>)}
+            {avancado && (<div style={aCard}>
               <div style={aCardH}>Momentos da tradução</div>
               {MOMENT_ORDER.map((m) => (<div key={m} style={aKv}><span>{MOMENTS[m].name}</span><strong>{analise.moments[m] || 0}</strong></div>))}
-            </div>
-            <div style={aCard}>
+            </div>)}
+            {avancado && (<div style={aCard}>
               <div style={aCardH}>Frentes e relações</div>
               <div style={aKv}><span>Programa</span><strong>{analise.front.programa}</strong></div>
               <div style={aKv}><span>Antiprograma</span><strong>{analise.front.antiprograma}</strong></div>
               <div style={aKv}><span>Porta-voz</span><strong>{analise.kinds["porta-voz"] || 0}</strong></div>
               <div style={aKv}><span>Delegação</span><strong>{analise.kinds.delegacao || 0}</strong></div>
               <div style={aKv}><span>Cadeia de ref.</span><strong>{analise.kinds.referencia || 0}</strong></div>
-            </div>
+            </div>)}
             <div style={aCard}>
               <div style={aCardH}>Fontes (rastro empírico)</div>
               <div style={aKv}><span>Entrevista</span><strong>{analise.fontes.entrevista}</strong></div>
@@ -1057,18 +1061,18 @@ table.cent{border-collapse:collapse;width:100%;font-size:12px} table.cent th{tex
               <div style={aCardH}>Natureza</div>
               {barRows([{ label: "Humano", value: analise.byNat.humano }, { label: "Não-humano", value: analise.byNat.nao }, { label: "Indefinido", value: analise.byNat.indef }], "#3f7d54")}
             </div>
-            <div style={aCard}>
+            {avancado && (<div style={aCard}>
               <div style={aCardH}>Momentos da tradução</div>
               {barRows(MOMENT_ORDER.map((m) => ({ label: MOMENTS[m].name, value: analise.moments[m] || 0 })), "#c98a2b")}
-            </div>
+            </div>)}
             <div style={aCard}>
               <div style={aCardH}>Centralidade (top 8)</div>
               {analise.ranking.length ? barRows(analise.ranking.slice(0, 8).map((r) => ({ label: r.label, value: r.tot })), "#7d2e6e") : <div style={{ fontSize: 12, color: "#b3bcc4" }}>sem dados</div>}
             </div>
-            <div style={aCard}>
+            {avancado && (<div style={aCard}>
               <div style={aCardH}>Intermediação / betweenness (top 8)</div>
               {analise.betRanking.length ? barRows(analise.betRanking.slice(0, 8).map((r) => ({ label: r.label, value: r.bet })), "#b06a1f") : <div style={{ fontSize: 12, color: "#b3bcc4" }}>sem dados</div>}
-            </div>
+            </div>)}
           </div>
 
           <div style={{ ...aCardH, fontSize: 12, marginBottom: 6 }}>Centralidade (grau): quem mais se conecta e quem age{hint("Grau = nº de conexões. Saída = age sobre outros; entrada = é mobilizado. Intermediação = faz ponte entre grupos.")}</div>
@@ -1094,20 +1098,20 @@ table.cent{border-collapse:collapse;width:100%;font-size:12px} table.cent th{tex
             {(actSearch || actFiltType !== "all" || actFiltNat !== "all") && <button style={{ ...ui.mini, padding: "4px 8px" }} onClick={() => { setActSearch(""); setActFiltType("all"); setActFiltNat("all"); }}>limpar</button>}
           </div>
           <div style={{ overflowX: "auto", marginBottom: 20, border: "1px solid #eef1f4", borderRadius: 8 }}>
-            <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 680 }}>
-              <thead><tr><th style={aTh}>Rótulo</th><th style={aTh}>Tipo</th><th style={aTh}>Natureza</th><th style={aTh}>Estabilização</th><th style={aTh}>Centro cálc.</th><th style={aTh}></th></tr></thead>
+            <table style={{ borderCollapse: "collapse", width: "100%", minWidth: avancado ? 680 : 420 }}>
+              <thead><tr><th style={aTh}>Rótulo</th><th style={aTh}>Tipo</th><th style={aTh}>Natureza</th>{avancado && <><th style={aTh}>Estabilização</th><th style={aTh}>Centro cálc.</th></>}<th style={aTh}></th></tr></thead>
               <tbody>
                 {actFiltered.map((n) => (
                   <tr key={n.id}>
                     <td style={{ ...aTd, minWidth: 160 }}><input style={aCell} value={n.label} onChange={(e) => upNode(n.id, { label: e.target.value })} onFocus={pushHist} /></td>
                     <td style={aTd}><select style={aCell} value={n.type} onChange={(e) => { pushHist(); upNode(n.id, { type: e.target.value }); }}>{TYPE_ORDER.map((t) => (<option key={t} value={t}>{NODE_TYPES[t].name}</option>))}</select></td>
                     <td style={aTd}><select style={aCell} value={n.nat || "indef"} onChange={(e) => { pushHist(); upNode(n.id, { nat: e.target.value }); }}><option value="indef">—</option><option value="humano">humano</option><option value="nao">não-humano</option></select></td>
-                    <td style={aTd}><select style={aCell} value={n.estab || ""} onChange={(e) => { pushHist(); upNode(n.id, { estab: e.target.value || undefined }); }}><option value="">—</option><option value="estab">estabilizado</option><option value="prova">em prova</option></select></td>
-                    <td style={{ ...aTd, textAlign: "center" }}><input type="checkbox" checked={!!n.calc} onChange={(e) => { pushHist(); upNode(n.id, { calc: e.target.checked || undefined }); }} /></td>
+                    {avancado && <><td style={aTd}><select style={aCell} value={n.estab || ""} onChange={(e) => { pushHist(); upNode(n.id, { estab: e.target.value || undefined }); }}><option value="">—</option><option value="estab">estabilizado</option><option value="prova">em prova</option></select></td>
+                    <td style={{ ...aTd, textAlign: "center" }}><input type="checkbox" checked={!!n.calc} onChange={(e) => { pushHist(); upNode(n.id, { calc: e.target.checked || undefined }); }} /></td></>}
                     <td style={aTd}><button style={{ ...ui.mini, padding: "4px 8px" }} onClick={() => removeNodeById(n.id)} title="remover">✕</button></td>
                   </tr>
                 ))}
-                {!actFiltered.length && (<tr><td style={aTd} colSpan={6}>{state.nodes.length ? "nenhum actante corresponde ao filtro." : "nenhum actante. Clique “+ Actante”."}</td></tr>)}
+                {!actFiltered.length && (<tr><td style={aTd} colSpan={avancado ? 6 : 4}>{state.nodes.length ? "nenhum actante corresponde ao filtro." : "nenhum actante. Clique “+ Actante”."}</td></tr>)}
               </tbody>
             </table>
           </div>
@@ -1118,28 +1122,28 @@ table.cent{border-collapse:collapse;width:100%;font-size:12px} table.cent th{tex
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 6 }}>
             <input placeholder="buscar origem/destino…" value={assocSearch} onChange={(e) => setAssocSearch(e.target.value)} style={{ ...aCell, width: 180, flex: "0 0 auto" }} />
-            <select value={assocFiltKind} onChange={(e) => setAssocFiltKind(e.target.value)} style={{ ...aCell, width: "auto" }}><option value="all">toda relação</option><option value="associacao">associação</option><option value="porta-voz">porta-voz</option><option value="delegacao">delegação</option><option value="referencia">cadeia de ref.</option></select>
-            <select value={assocFiltMoment} onChange={(e) => setAssocFiltMoment(e.target.value)} style={{ ...aCell, width: "auto" }}><option value="all">todo momento</option>{MOMENT_ORDER.map((m) => (<option key={m} value={m}>{MOMENTS[m].name}</option>))}</select>
+            {avancado && <><select value={assocFiltKind} onChange={(e) => setAssocFiltKind(e.target.value)} style={{ ...aCell, width: "auto" }}><option value="all">toda relação</option><option value="associacao">associação</option><option value="porta-voz">porta-voz</option><option value="delegacao">delegação</option><option value="referencia">cadeia de ref.</option></select>
+            <select value={assocFiltMoment} onChange={(e) => setAssocFiltMoment(e.target.value)} style={{ ...aCell, width: "auto" }}><option value="all">todo momento</option>{MOMENT_ORDER.map((m) => (<option key={m} value={m}>{MOMENTS[m].name}</option>))}</select></>}
             <span style={{ fontSize: 11.5, color: "#9aa7b2" }}>{assocFiltered.length} de {state.edges.length}</span>
             {(assocSearch || assocFiltKind !== "all" || assocFiltMoment !== "all") && <button style={{ ...ui.mini, padding: "4px 8px" }} onClick={() => { setAssocSearch(""); setAssocFiltKind("all"); setAssocFiltMoment("all"); }}>limpar</button>}
           </div>
           <div style={{ overflowX: "auto", marginBottom: 20, border: "1px solid #eef1f4", borderRadius: 8 }}>
-            <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 860 }}>
-              <thead><tr><th style={aTh}>Origem</th><th style={aTh}>Destino</th><th style={aTh}>Relação</th><th style={aTh}>Momento</th><th style={aTh}>Frente</th><th style={aTh}>Fonte</th><th style={aTh}>Seta</th><th style={aTh}></th></tr></thead>
+            <table style={{ borderCollapse: "collapse", width: "100%", minWidth: avancado ? 860 : 520 }}>
+              <thead><tr><th style={aTh}>Origem</th><th style={aTh}>Destino</th>{avancado && <><th style={aTh}>Relação</th><th style={aTh}>Momento</th><th style={aTh}>Frente</th></>}<th style={aTh}>Fonte</th><th style={aTh}>Seta</th><th style={aTh}></th></tr></thead>
               <tbody>
                 {assocFiltered.map((e) => (
                   <tr key={e.id}>
                     <td style={aTd}><select style={aCell} value={e.from} onChange={(ev) => { pushHist(); upEdge(e.id, { from: ev.target.value }); }}>{state.nodes.map((n) => (<option key={n.id} value={n.id}>{n.label}</option>))}</select></td>
                     <td style={aTd}><select style={aCell} value={e.to} onChange={(ev) => { pushHist(); upEdge(e.id, { to: ev.target.value }); }}>{state.nodes.map((n) => (<option key={n.id} value={n.id}>{n.label}</option>))}</select></td>
-                    <td style={aTd}><select style={aCell} value={e.kind || ""} onChange={(ev) => { pushHist(); upEdge(e.id, { kind: ev.target.value || undefined }); }}><option value="">associação</option><option value="porta-voz">porta-voz</option><option value="delegacao">delegação</option><option value="referencia">cadeia de ref.</option></select></td>
+                    {avancado && <><td style={aTd}><select style={aCell} value={e.kind || ""} onChange={(ev) => { pushHist(); upEdge(e.id, { kind: ev.target.value || undefined }); }}><option value="">associação</option><option value="porta-voz">porta-voz</option><option value="delegacao">delegação</option><option value="referencia">cadeia de ref.</option></select></td>
                     <td style={aTd}><select style={aCell} value={e.moment || ""} onChange={(ev) => { pushHist(); upEdge(e.id, { moment: ev.target.value || undefined }); }}><option value="">—</option>{MOMENT_ORDER.map((m) => (<option key={m} value={m}>{MOMENTS[m].name}</option>))}</select></td>
-                    <td style={aTd}><select style={aCell} value={e.front || ""} onChange={(ev) => { pushHist(); upEdge(e.id, { front: ev.target.value || undefined }); }}><option value="">—</option><option value="programa">programa</option><option value="antiprograma">antiprograma</option></select></td>
+                    <td style={aTd}><select style={aCell} value={e.front || ""} onChange={(ev) => { pushHist(); upEdge(e.id, { front: ev.target.value || undefined }); }}><option value="">—</option><option value="programa">programa</option><option value="antiprograma">antiprograma</option></select></td></>}
                     <td style={aTd}><select style={aCell} value={e.fonteTipo || ""} onChange={(ev) => { pushHist(); upEdge(e.id, { fonteTipo: ev.target.value || undefined }); }}><option value="">—</option><option value="entrevista">entrevista</option><option value="documento">documento</option><option value="observacao">observação</option><option value="outro">outro</option></select></td>
                     <td style={{ ...aTd, textAlign: "center" }}><input type="checkbox" checked={!!e.directed} onChange={(ev) => { pushHist(); upEdge(e.id, { directed: ev.target.checked }); }} /></td>
                     <td style={aTd}><button style={{ ...ui.mini, padding: "4px 8px" }} onClick={() => removeEdgeById(e.id)} title="remover">✕</button></td>
                   </tr>
                 ))}
-                {!assocFiltered.length && (<tr><td style={aTd} colSpan={8}>{state.edges.length ? "nenhuma associação corresponde ao filtro." : state.nodes.length < 2 ? "nenhuma associação. Cadastre ao menos 2 actantes." : "nenhuma associação. Clique “+ Associação”."}</td></tr>)}
+                {!assocFiltered.length && (<tr><td style={aTd} colSpan={avancado ? 8 : 5}>{state.edges.length ? "nenhuma associação corresponde ao filtro." : state.nodes.length < 2 ? "nenhuma associação. Cadastre ao menos 2 actantes." : "nenhuma associação. Clique “+ Associação”."}</td></tr>)}
               </tbody>
             </table>
           </div>
@@ -1151,6 +1155,7 @@ table.cent{border-collapse:collapse;width:100%;font-size:12px} table.cent th{tex
             <button style={ui.btn("primary")} onClick={gerarRelatorio}>Relatório (PDF)</button>
           </div>
 
+          {avancado && (<>
           <div style={{ ...aCardH, fontSize: 12, margin: "20px 0 6px" }}>Importar planilha (CSV)</div>
           {impMsg && <div style={{ fontSize: 12, color: "#2e7d4f", marginBottom: 8 }}>{impMsg}</div>}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px,1fr))", gap: 12 }}>
@@ -1175,6 +1180,7 @@ table.cent{border-collapse:collapse;width:100%;font-size:12px} table.cent th{tex
               </div>
             </div>
           </div>
+          </>)}
         </div>
       )}
       {showHelp && (

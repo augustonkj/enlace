@@ -190,7 +190,7 @@ const TOUR = [
   { t: "Bem-vindo", b: "Este software cria diagramas da Teoria Ator-Rede (Latour) e faz a análise quantitativa da rede. Vamos ver o básico em alguns passos." },
   { t: "Duas abas", b: "Aqui você alterna entre Análise (tabelas e métricas) e Diagrama (o desenho). As duas trabalham sobre os mesmos dados.", target: "tour-tabs" },
   { t: "Inserir e ligar", b: "Na seção Inserir, clique num tipo (mediador, intermediário, OPP…) para criar a caixa, use \u201cLigar nós\u201d para conectar e \u201cOrganizar em rede\u201d para acomodar tudo.", view: "diagrama", target: "tour-ins" },
-  { t: "Categorizar", b: "Na aba Análise você cadastra e categoriza os actantes (tipo, natureza, estabilização) e as associações em tabelas. Tudo alimenta o diagrama.", view: "analise", target: "tour-analise" },
+  { t: "Categorizar", b: "Na aba Análise você cadastra os actantes (tipo e natureza) e as associações, com a fonte de cada uma. Tudo alimenta o diagrama. Os demais conceitos da TAR ficam no botão Avançado.", view: "analise", target: "tour-analise" },
   { t: "Análise quantitativa", b: "Aqui também ficam o resumo, o grau (centralidade), a intermediação, os componentes e os gráficos. Dá para exportar CSV e gerar um relatório em PDF.", view: "analise", target: "tour-analise" },
   { t: "Salvar", b: "Nada fica gravado no navegador: para guardar ou compartilhar, use \u201cSalvar projeto\u201d (.json). O botão ? Ajuda abre o guia completo a qualquer hora.", target: "tour-save" },
 ];
